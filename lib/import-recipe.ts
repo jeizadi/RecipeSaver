@@ -35,7 +35,8 @@ export interface ImportedRecipe {
 }
 
 function decodeHtml(html: string): string {
-  return html
+  // Basic named entities and common fraction entities.
+  let s = html
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
@@ -46,6 +47,22 @@ function decodeHtml(html: string): string {
     .replace(/&frac34;/g, "3/4")
     .replace(/&frac13;/g, "1/3")
     .replace(/&frac23;/g, "2/3");
+
+  // Decode numeric entities like &#189; (½) or &#8531; (⅓).
+  s = s.replace(/&#(\d+);/g, (_m, code) => {
+    const n = Number(code);
+    if (!Number.isFinite(n)) return _m;
+    return String.fromCharCode(n);
+  });
+
+  // Decode hex numeric entities like &#x00BD; if present.
+  s = s.replace(/&#x([0-9a-fA-F]+);/g, (_m, hex) => {
+    const n = parseInt(hex, 16);
+    if (!Number.isFinite(n)) return _m;
+    return String.fromCharCode(n);
+  });
+
+  return s;
 }
 
 function normalizeText(value: string | null | undefined): string | null {
@@ -53,6 +70,15 @@ function normalizeText(value: string | null | undefined): string | null {
   let s = decodeHtml(String(value));
   s = s.replace(/\u00A0/g, " ");
   for (const [k, v] of Object.entries(FRACTION_MAP)) s = s.replaceAll(k, v);
+  // Fix mixed numbers like "11/2" that came from "1½" → "1" + "1/2"
+  // by inserting a space between the whole number and fraction.
+  s = s.replace(/\b(\d)(\d+\/\d+)\b/g, "$1 $2");
+  // Tidy up numeric quantities with too many decimal places
+  // (e.g. "15.873 oz" -> "15.9 oz") to avoid noisy decimals from some schemas.
+  s = s.replace(
+    /\b(\d+\.\d{3,})\b/g,
+    (_m, num) => Number(num).toFixed(1).replace(/\.0$/, "")
+  );
   s = s.trim();
   return s || null;
 }
@@ -122,15 +148,30 @@ function parseInstructions(instructions: unknown): string | null {
       }
       if (item && typeof item === "object" && !Array.isArray(item)) {
         const obj = item as JsonObj;
-        const text = (obj.text ?? obj.name) as string | undefined;
-        if (typeof text === "string" && text.trim()) {
-          steps.push(normalizeText(text) ?? "");
-        } else if (
+        // Handle HowToSection explicitly so we don't lose nested steps.
+        if (
           obj["@type"] === "HowToSection" &&
           Array.isArray(obj.itemListElement)
         ) {
+          const sectionName =
+            typeof obj.name === "string" && obj.name.trim()
+              ? normalizeText(obj.name as string)
+              : null;
           const nested = parseInstructions(obj.itemListElement);
-          if (nested) steps.push(nested);
+          if (sectionName) {
+            steps.push(sectionName);
+          }
+          if (nested) {
+            for (const line of nested.split("\n")) {
+              if (line.trim()) steps.push(line.trim());
+            }
+          }
+          continue;
+        }
+
+        const text = (obj.text ?? obj.name) as string | undefined;
+        if (typeof text === "string" && text.trim()) {
+          steps.push(normalizeText(text) ?? "");
         }
       }
     }
@@ -138,6 +179,12 @@ function parseInstructions(instructions: unknown): string | null {
   }
   if (typeof instructions === "object" && instructions !== null) {
     const obj = instructions as JsonObj;
+    if (
+      obj["@type"] === "HowToSection" &&
+      Array.isArray(obj.itemListElement)
+    ) {
+      return parseInstructions(obj.itemListElement);
+    }
     const text = (obj.text ?? obj.name) as string | undefined;
     if (typeof text === "string" && text.trim()) return normalizeText(text);
   }
@@ -205,6 +252,43 @@ function extractImageUrl(recipeObj: JsonObj): string | null {
   if (image && typeof image === "object" && typeof (image as JsonObj).url === "string")
     return normalizeText((image as JsonObj).url as string);
   return null;
+}
+
+function extractDirectionsFromHtml(html: string): string | null {
+  const $ = cheerio.load(html);
+
+  // Look for a heading that contains a directions/instructions keyword.
+  const heading = $("h1, h2, h3, h4, h5, h6")
+    .filter((_, el) => {
+      const text = $(el).text().trim().toLowerCase();
+      return (
+        text.includes("directions") ||
+        text.includes("instructions") ||
+        text.includes("method")
+      );
+    })
+    .first();
+
+  if (!heading.length) return null;
+
+  // Prefer the first ordered/unordered list after the heading.
+  let list = heading.nextAll("ol,ul").first();
+  if (!list.length) {
+    // Fallback: search within the same section/container.
+    list = heading.parent().find("ol,ul").first();
+  }
+  if (!list.length) return null;
+
+  const steps: string[] = [];
+  list.find("li").each((_, li) => {
+    const raw = $(li).text();
+    const text = normalizeText(raw);
+    if (text && text.trim()) {
+      steps.push(text.trim());
+    }
+  });
+
+  return steps.length ? steps.join("\n") : null;
 }
 
 function inferCategory(text: string | null | undefined): string | null {
@@ -309,8 +393,15 @@ function parseFromJsonLd(html: string): ImportedRecipe | null {
       normalizeMultiline(
         coerceListToText(recipeObj.recipeIngredient) ?? coerceListToText(recipeObj.ingredients)
       ) ?? "";
+
+    // Some sites use non-standard keys like "recipeDirections" or "directions"
+    // instead of "recipeInstructions". Try these fallbacks before giving up.
+    const rawInstructions =
+      (recipeObj as JsonObj).recipeInstructions ??
+      (recipeObj as JsonObj).recipeDirections ??
+      (recipeObj as JsonObj).directions;
     imported.instructionsText =
-      normalizeMultiline(parseInstructions(recipeObj.recipeInstructions)) ?? "";
+      normalizeMultiline(parseInstructions(rawInstructions)) ?? "";
     imported.prepTimeMinutes = iso8601ToMinutes(recipeObj.prepTime as string);
     imported.cookTimeMinutes = iso8601ToMinutes(recipeObj.cookTime as string);
     imported.totalTimeMinutes = iso8601ToMinutes(recipeObj.totalTime as string);
@@ -370,13 +461,25 @@ export async function importRecipeFromUrl(url: string): Promise<ImportedRecipe> 
   if (!res.ok) throw new RecipeImportError(`Failed to fetch: ${res.status}`);
   const html = await res.text();
 
-  const fromJsonLd = parseFromJsonLd(html);
-  if (fromJsonLd) return fromJsonLd;
-
+  let recipe = parseFromJsonLd(html);
   const hostname = new URL(url).hostname.toLowerCase();
   const isVideoLike = VIDEO_HOSTS.has(hostname);
-  const fromOg = parseFromOpenGraph(html, isVideoLike);
-  if (fromOg) return fromOg;
+
+  if (!recipe) {
+    recipe = parseFromOpenGraph(html, isVideoLike);
+  }
+
+  if (recipe) {
+    // If we didn't get instructions from structured data, try a plain-HTML fallback
+    // by looking for a "Directions"/"Instructions" section in the page.
+    if (!recipe.instructionsText) {
+      const htmlDirections = extractDirectionsFromHtml(html);
+      if (htmlDirections) {
+        recipe.instructionsText = htmlDirections;
+      }
+    }
+    return recipe;
+  }
 
   throw new RecipeImportError("Could not find recipe structured data on that page.");
 }

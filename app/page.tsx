@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { WeeklyPlannerClient } from "./weekly-planner-client";
 
 const CATEGORIES = [
   { value: "", label: "Any" },
@@ -138,34 +139,16 @@ export default async function HomePage({
       <section>
         {recipes.length > 0 ? (
           <>
-            <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {recipes.map((r) => (
-                <li
-                  key={r.id}
-                  className="rounded-lg bg-white p-4 shadow-sm transition hover:shadow"
-                >
-                  <h3 className="font-semibold">
-                    <Link
-                      href={`/recipes/${r.id}`}
-                      className="text-[#5b3b2a] hover:underline"
-                    >
-                      {r.title}
-                    </Link>
-                  </h3>
-                  <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-[#7f8c8d]">
-                    <span className="rounded-full bg-[#fdebd0] px-2 py-0.5 text-xs">
-                      {categoryLabel(r.category)}
-                    </span>
-                    {r.tags && <span>{r.tags}</span>}
-                  </p>
-                  {r.description && (
-                    <p className="mt-2 line-clamp-2 text-sm text-zinc-600">
-                      {r.description}
-                    </p>
-                  )}
-                </li>
-              ))}
-            </ul>
+            <WeeklyPlannerClient
+              recipes={recipes.map((r) => ({
+                id: r.id,
+                title: r.title,
+                category: categoryLabel(r.category),
+                tags: r.tags,
+                description: r.description,
+                ingredientsText: r.ingredientsText,
+              }))}
+            />
             {totalPages > 1 && (
               <div className="mt-4 flex items-center gap-3">
                 {page > 1 && (
