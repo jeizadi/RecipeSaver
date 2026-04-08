@@ -45,6 +45,9 @@ export function WeeklyPlannerClient({ recipes }: Props) {
   const [clipboardText, setClipboardText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [useAiMerge, setUseAiMerge] = useState(false);
+  const [mergeInfo, setMergeInfo] = useState<string | null>(null);
+  const [mergeInfoIsError, setMergeInfoIsError] = useState(false);
 
   const sauceLinksByRecipe = useMemo(
     () => findSauceLinks(recipes),
@@ -71,6 +74,8 @@ export function WeeklyPlannerClient({ recipes }: Props) {
 
   function toggleRecipe(id: number) {
     setClipboardText("");
+    setMergeInfo(null);
+    setMergeInfoIsError(false);
     setError(null);
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
@@ -79,6 +84,8 @@ export function WeeklyPlannerClient({ recipes }: Props) {
 
   function toggleSauceUrl(url: string) {
     setClipboardText("");
+    setMergeInfo(null);
+    setMergeInfoIsError(false);
     setError(null);
     setSelectedSauceUrls((prev) =>
       prev.includes(url) ? prev.filter((u) => u !== url) : [...prev, url]
@@ -92,6 +99,8 @@ export function WeeklyPlannerClient({ recipes }: Props) {
     }
     setLoading(true);
     setError(null);
+    setMergeInfo(null);
+    setMergeInfoIsError(false);
     try {
       const res = await fetch("/api/shopping-list", {
         method: "POST",
@@ -99,6 +108,7 @@ export function WeeklyPlannerClient({ recipes }: Props) {
         body: JSON.stringify({
           recipeIds: selectedIds,
           sauceUrls: selectedSauceUrls,
+          useAiMerge,
         }),
       });
       const data = await res.json();
@@ -108,6 +118,23 @@ export function WeeklyPlannerClient({ recipes }: Props) {
         return;
       }
       setClipboardText(data.clipboardText ?? "");
+      if (useAiMerge) {
+        if (data.aiMergeApplied) {
+          setMergeInfo("AI merge applied on top of the standard list.");
+          setMergeInfoIsError(false);
+        } else if (data.aiMergeError) {
+          setMergeInfo(data.aiMergeError);
+          setMergeInfoIsError(true);
+        } else {
+          setMergeInfo(
+            "AI merge did not run. Add GEMINI_API_KEY (or OPENAI_API_KEY) to .env and restart the dev server."
+          );
+          setMergeInfoIsError(true);
+        }
+      } else {
+        setMergeInfo(null);
+        setMergeInfoIsError(false);
+      }
     } catch {
       setError("Failed to build shopping list.");
       setClipboardText("");
@@ -129,6 +156,8 @@ export function WeeklyPlannerClient({ recipes }: Props) {
     setSelectedSauceUrls([]);
     setClipboardText("");
     setError(null);
+    setMergeInfo(null);
+    setMergeInfoIsError(false);
   }
 
   const hasPlan =
@@ -238,6 +267,32 @@ export function WeeklyPlannerClient({ recipes }: Props) {
         {error && (
           <p className="mb-2 text-xs text-[#c0392b]">
             {error}
+          </p>
+        )}
+
+        <label className="mb-3 flex cursor-pointer items-start gap-2 text-xs text-[#5b3b2a]">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={useAiMerge}
+            onChange={(e) => {
+              setUseAiMerge(e.target.checked);
+              setMergeInfo(null);
+              setMergeInfoIsError(false);
+            }}
+          />
+          <span>
+            Smarter merge (AI) — extra pass to combine similar lines. Set{" "}
+            <code className="text-[11px]">GEMINI_API_KEY</code> (or OpenAI) on the
+            server.
+          </span>
+        </label>
+
+        {mergeInfo && (
+          <p
+            className={`mb-2 text-xs ${mergeInfoIsError ? "text-[#c0392b]" : "text-[#7f8c8d]"}`}
+          >
+            {mergeInfo}
           </p>
         )}
 

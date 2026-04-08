@@ -77,6 +77,12 @@ const UNIT_ALIASES: Record<string, string> = {
   liters: "l",
   clove: "clove",
   cloves: "clove",
+  head: "head",
+  heads: "head",
+  bunch: "bunch",
+  bunches: "bunch",
+  can: "can",
+  cans: "can",
   pinch: "pinch",
   pinches: "pinch",
   dash: "dash",
@@ -137,6 +143,121 @@ function normalizeUnit(raw: string | null | undefined): string | null {
   const key = raw.trim().toLowerCase();
   if (!key) return null;
   return UNIT_ALIASES[key] ?? key;
+}
+
+/**
+ * Strip parenthetical weights/sizes (blog-style) so lines group in shopping lists.
+ * Leaves narrative parens like (I recommend…) — they rarely start with a bare measurement pattern.
+ */
+function stripMeasurementParentheticalsForShopping(text: string): string {
+  let s = text;
+  const patterns = [
+    /\s*\(\s*\d+(?:\.\d+)?\s*g\s*\)/gi,
+    /\s*\(\s*\d+(?:\.\d+)?\s*ml\s*\)/gi,
+    /\s*\(\s*\d+(?:\.\d+)?\s*(?:oz|ounce|ounces)\s*\)/gi,
+    /\s*\(\s*\d+\s*[-–]\s*ounce[^)]*\)/gi,
+    /\s*\(\s*\d+(?:\.\d+)?\s*[-–]\s*\d+\s*(?:oz|ounce|ounces)[^)]*\)/gi,
+  ];
+  for (const re of patterns) {
+    s = s.replace(re, "");
+  }
+  return s.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Map variant wordings to one merge bucket (after {@link buildNameKey}).
+ * More specific patterns must come first.
+ */
+function canonicalMergeNameKey(nameKey: string): string {
+  const k = nameKey.trim();
+  const rules: Array<{ pattern: RegExp; key: string }> = [
+    {
+      pattern: /\bapple\s+cider\s+vinegar\b/,
+      key: "apple cider vinegar",
+    },
+    {
+      pattern:
+        /\bgreek\b.*\byogh?urt\b|\byogh?urt\b.*\bgreek\b/,
+      key: "greek yogurt",
+    },
+    { pattern: /\bblack\s+beans?\b/, key: "black beans" },
+    { pattern: /\bground\s+cumin\b/, key: "ground cumin" },
+    {
+      pattern: /\bground\s+chili\s+powder\b|\bchili\s+powder\b/,
+      key: "chili powder",
+    },
+  ];
+  for (const { pattern, key } of rules) {
+    if (pattern.test(k)) return key;
+  }
+  return k;
+}
+
+/**
+ * "half an onion" / "half a lime" → "1/2 …" so fractions merge with numeric halves.
+ * Does not match "half and half".
+ */
+function rewriteLeadingHalfLine(line: string): string {
+  const t = line.trim();
+  if (/^half and half\b/i.test(t)) return line;
+  const halfAn = t.match(/^half an?\s+(.+)$/i);
+  if (halfAn) {
+    return `1/2 ${halfAn[1]}`;
+  }
+  const halfA = t.match(/^half a\s+(.+)$/i);
+  if (halfA) {
+    return `1/2 ${halfA[1]}`;
+  }
+  return line;
+}
+
+/** Produce where a bare count ("1 lettuce") usually means heads. */
+function isHeadCountableProduce(nameKey: string): boolean {
+  return /\b(lettuce|cabbage|cauliflower|broccoli|romaine|iceberg|kale|bok\s+choy)\b/i.test(
+    nameKey
+  );
+}
+
+/**
+ * Strip "of " after head/clove/bunch; normalize "garlic cloves" → garlic + unit clove.
+ */
+function normalizeParsedForConsolidation(
+  ing: ParsedIngredient
+): ParsedIngredient {
+  const { quantity, unit } = ing;
+  let name = ing.name;
+  if (unit === "head" || unit === "clove" || unit === "bunch") {
+    name = name.replace(/^of\s+/i, "").trim();
+  }
+  const ln = name.toLowerCase();
+  if (quantity != null && /^garlic\s+cloves?$/.test(ln)) {
+    return { ...ing, name: "garlic", unit: "clove", quantity };
+  }
+  return { ...ing, name, unit };
+}
+
+/**
+ * When quantity is missing, assume 1 for countable head/clove/bunch lines so merges sum sensibly.
+ */
+function contributionQuantity(
+  ing: ParsedIngredient,
+  nameKey: string,
+  unitKey: string | null
+): number | null {
+  if (ing.quantity != null) return ing.quantity;
+  if (unitKey === "head" && isHeadCountableProduce(nameKey)) return 1;
+  if (unitKey === "clove") return 1;
+  if (unitKey === "bunch") return 1;
+  return null;
+}
+
+function canonicalUnitForGrouping(
+  nameKey: string,
+  unitKey: string | null
+): string | null {
+  if (unitKey) return unitKey;
+  if (isHeadCountableProduce(nameKey)) return "head";
+  return null;
 }
 
 /** Same shape as {@link appendMergedRecipeBlocks} headings in merge-recipe-text.ts */
@@ -236,6 +357,8 @@ export function expandMergedRecipeIngredientsText(text: string): string {
 export function parseIngredientLine(line: string): ParsedIngredient | null {
   const original = line;
   let text = normalizeUnicodeFractions(line).trim();
+  text = rewriteLeadingHalfLine(text);
+  text = stripMeasurementParentheticalsForShopping(text);
   if (!text) return null;
 
   if (MERGED_SECTION_HEADING_RE.test(text)) {
@@ -250,6 +373,9 @@ export function parseIngredientLine(line: string): ParsedIngredient | null {
     lower.endsWith(":") ||
     lower.startsWith("#")
   ) {
+    return null;
+  }
+  if (/^(dry|wet)\s+ingredients?\s*$/i.test(lower)) {
     return null;
   }
 
@@ -363,10 +489,13 @@ export function consolidateIngredients(
     const parsed = parseIngredientsText(
       expandMergedRecipeIngredientsText(source.ingredientsText)
     );
-    for (const ing of parsed) {
-      const nameKey = buildNameKey(ing);
-      const unitKey = normalizeUnit(ing.unit ?? undefined);
+    for (const raw of parsed) {
+      const ing = normalizeParsedForConsolidation(raw);
+      const nameKey = canonicalMergeNameKey(buildNameKey(ing));
+      const normalizedDeclaredUnit = normalizeUnit(ing.unit ?? undefined);
+      const unitKey = canonicalUnitForGrouping(nameKey, normalizedDeclaredUnit);
       const groupKey = unitKey ? `${nameKey}|${unitKey}` : nameKey;
+      const contrib = contributionQuantity(ing, nameKey, unitKey);
 
       const existing = byKey.get(groupKey);
       if (!existing) {
@@ -374,14 +503,17 @@ export function consolidateIngredients(
           nameKey,
           displayName: ing.name,
           unit: unitKey ?? null,
-          totalQuantity: ing.quantity,
-          lines: [ing.original],
+          totalQuantity: contrib ?? null,
+          lines: [raw.original],
         });
       } else {
-        existing.lines.push(ing.original);
-        if (ing.quantity != null) {
+        existing.lines.push(raw.original);
+        if (contrib != null) {
           existing.totalQuantity =
-            (existing.totalQuantity ?? 0) + ing.quantity;
+            (existing.totalQuantity ?? 0) + contrib;
+        }
+        if (ing.name.length < existing.displayName.length) {
+          existing.displayName = ing.name;
         }
       }
     }
@@ -439,7 +571,13 @@ export function formatAggregatedForClipboard(items: AggregatedIngredient[]): str
       parts.push(formatQuantity(item.totalQuantity));
     }
     if (item.unit) {
-      parts.push(item.unit);
+      const u =
+        item.unit === "head" &&
+        item.totalQuantity != null &&
+        item.totalQuantity > 1
+          ? "heads"
+          : item.unit;
+      parts.push(u);
     }
     parts.push(item.displayName);
     const line = parts.join(" ").trim();

@@ -5,10 +5,13 @@ import {
   formatAggregatedForClipboard,
 } from "@/lib/ingredients";
 import { importRecipeFromUrl } from "@/lib/import-recipe";
+import { refineAggregatedItemsWithLlm } from "@/lib/shopping-list-llm";
 
 type RequestBody = {
   recipeIds?: number[];
   sauceUrls?: string[];
+  /** When true and GEMINI_API_KEY or OPENAI_API_KEY is set, run an optional LLM merge pass */
+  useAiMerge?: boolean;
 };
 
 export async function POST(request: NextRequest) {
@@ -101,13 +104,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const items = consolidateIngredients(sources);
-    const clipboardText = formatAggregatedForClipboard(items);
+    let items = consolidateIngredients(sources);
+    let clipboardText = formatAggregatedForClipboard(items);
+
+    let aiMergeApplied = false;
+    let aiMergeError: string | null = null;
+    if (body.useAiMerge === true) {
+      const refined = await refineAggregatedItemsWithLlm(items);
+      if (refined.ok) {
+        items = refined.items.sort((a, b) =>
+          a.displayName.localeCompare(b.displayName)
+        );
+        clipboardText = formatAggregatedForClipboard(items);
+        aiMergeApplied = true;
+      } else {
+        aiMergeError = refined.error;
+      }
+    }
 
     return NextResponse.json({
       ok: true,
       items,
       clipboardText,
+      aiMergeApplied,
+      aiMergeError,
     });
   } catch (e) {
     console.error(e);
