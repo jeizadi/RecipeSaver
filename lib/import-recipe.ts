@@ -291,6 +291,7 @@ function extractDirectionsFromHtml(html: string): string | null {
   return steps.length ? steps.join("\n") : null;
 }
 
+
 function inferCategory(text: string | null | undefined): string | null {
   if (text == null || text === "") return null;
   const t = text.toLowerCase();

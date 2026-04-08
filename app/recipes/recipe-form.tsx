@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { LinkedRecipeHints } from "./linked-recipe-hints";
+import { MergeRecipePanel } from "./merge-recipe-panel";
 
 const CATEGORIES = [
   "breakfast",
@@ -60,6 +62,7 @@ export function RecipeForm({
   const [statusError, setStatusError] = useState(false);
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [linkHintsScanNonce, setLinkHintsScanNonce] = useState(0);
 
   const [form, setForm] = useState(initial);
 
@@ -106,6 +109,7 @@ export function RecipeForm({
         author: d.author ?? prev.author,
         category: d.category ?? prev.category,
       }));
+      setLinkHintsScanNonce((n) => n + 1);
       setStatus("Imported! Review and click Save.");
       setStatusError(false);
     } catch {
@@ -190,6 +194,64 @@ export function RecipeForm({
           </p>
         )}
       </div>
+
+      <LinkedRecipeHints
+        parentRecipeId={recipeId}
+        sourceUrl={form.sourceUrl}
+        autoScanNonce={linkHintsScanNonce}
+        ingredientsText={form.ingredientsText}
+        instructionsText={form.instructionsText}
+        onMergeFromLibrary={
+          recipeId != null
+            ? async (childRecipeId, mergedTitle) => {
+                const res = await fetch(`/api/recipes/${recipeId}/merge`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    childRecipeId,
+                    ingredientsText: form.ingredientsText,
+                    instructionsText: form.instructionsText,
+                  }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!data.ok) {
+                  setStatus(data.error ?? "Merge failed.");
+                  setStatusError(true);
+                  return;
+                }
+                setForm((prev) => ({
+                  ...prev,
+                  ingredientsText: data.ingredientsText ?? prev.ingredientsText,
+                  instructionsText:
+                    data.instructionsText ?? prev.instructionsText,
+                }));
+                setStatus(
+                  `Merged “${mergedTitle}” into this recipe. Review and click Save to store it.`
+                );
+                setStatusError(false);
+              }
+            : undefined
+        }
+      />
+
+      {recipeId != null && (
+        <MergeRecipePanel
+          parentRecipeId={recipeId}
+          ingredientsText={form.ingredientsText}
+          instructionsText={form.instructionsText}
+          onMerged={(ing, inst, mergedTitle) => {
+            setForm((prev) => ({
+              ...prev,
+              ingredientsText: ing,
+              instructionsText: inst,
+            }));
+            setStatus(
+              `Merged “${mergedTitle}” into this recipe. Review the text and click Save to store it.`
+            );
+            setStatusError(false);
+          }}
+        />
+      )}
 
       <div className="flex flex-col gap-1">
         <label className="text-sm font-medium">Title *</label>

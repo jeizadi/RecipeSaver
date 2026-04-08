@@ -11,14 +11,6 @@ type RecipeSummary = {
   ingredientsText: string;
 };
 
-type ShoppingListItem = {
-  nameKey: string;
-  displayName: string;
-  unit: string | null;
-  totalQuantity: number | null;
-  lines: string[];
-};
-
 type Props = {
   recipes: RecipeSummary[];
 };
@@ -50,7 +42,6 @@ function findSauceLinks(recipes: RecipeSummary[]) {
 export function WeeklyPlannerClient({ recipes }: Props) {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [selectedSauceUrls, setSelectedSauceUrls] = useState<string[]>([]);
-  const [items, setItems] = useState<ShoppingListItem[] | null>(null);
   const [clipboardText, setClipboardText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -79,7 +70,6 @@ export function WeeklyPlannerClient({ recipes }: Props) {
   }, [selectedRecipes, sauceLinksByRecipe]);
 
   function toggleRecipe(id: number) {
-    setItems(null);
     setClipboardText("");
     setError(null);
     setSelectedIds((prev) =>
@@ -88,7 +78,6 @@ export function WeeklyPlannerClient({ recipes }: Props) {
   }
 
   function toggleSauceUrl(url: string) {
-    setItems(null);
     setClipboardText("");
     setError(null);
     setSelectedSauceUrls((prev) =>
@@ -115,15 +104,12 @@ export function WeeklyPlannerClient({ recipes }: Props) {
       const data = await res.json();
       if (!data.ok) {
         setError(data.error ?? "Failed to build shopping list.");
-        setItems(null);
         setClipboardText("");
         return;
       }
-      setItems((data.items as ShoppingListItem[]) ?? []);
       setClipboardText(data.clipboardText ?? "");
     } catch {
       setError("Failed to build shopping list.");
-      setItems(null);
       setClipboardText("");
     } finally {
       setLoading(false);
