@@ -139,10 +139,108 @@ function normalizeUnit(raw: string | null | undefined): string | null {
   return UNIT_ALIASES[key] ?? key;
 }
 
+/** Same shape as {@link appendMergedRecipeBlocks} headings in merge-recipe-text.ts */
+const MERGED_SECTION_HEADING_RE = /^---\s*(.+?)\s*\(merged\)\s*---\s*$/i;
+
+const TITLE_STOPWORDS = new Set([
+  "a",
+  "an",
+  "and",
+  "best",
+  "easy",
+  "fresh",
+  "from",
+  "for",
+  "homemade",
+  "how",
+  "make",
+  "my",
+  "or",
+  "our",
+  "recipe",
+  "simple",
+  "the",
+  "to",
+  "with",
+  "your",
+]);
+
+function significantTitleTokens(title: string): string[] {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 3 && !TITLE_STOPWORDS.has(t));
+}
+
+/**
+ * True if this ingredient line is shorthand for a merged sub-recipe (same title
+ * we append under `--- Title (merged) ---`), so the shopping list should use
+ * the merged block’s ingredients instead.
+ */
+function lineReferencesMergedRecipeTitle(
+  line: string,
+  mergedTitles: string[]
+): boolean {
+  if (!mergedTitles.length) return false;
+  const low = line.toLowerCase();
+  for (const title of mergedTitles) {
+    const tokens = significantTitleTokens(title);
+    if (tokens.length === 0) continue;
+    const hits = tokens.filter((t) => low.includes(t));
+    if (tokens.length === 1) {
+      if (hits.length === 1) return true;
+      continue;
+    }
+    const need = Math.max(2, Math.ceil(tokens.length * 0.66));
+    if (hits.length >= need) return true;
+  }
+  return false;
+}
+
+/**
+ * For shopping lists: drop `--- … (merged) ---` lines, remove main-list lines
+ * that name a merged sub-recipe, and concatenate merged sections’ ingredient
+ * lines so quantities reflect the full merged recipe.
+ */
+export function expandMergedRecipeIngredientsText(text: string): string {
+  if (!text.trim()) return text;
+  const lines = text.split(/\r?\n/);
+  const mainLines: string[] = [];
+  let current: string[] = mainLines;
+  const mergedBlocks: string[][] = [];
+  const mergedTitles: string[] = [];
+
+  for (const raw of lines) {
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    const m = trimmed.match(MERGED_SECTION_HEADING_RE);
+    if (m) {
+      mergedTitles.push(m[1].trim());
+      const next: string[] = [];
+      mergedBlocks.push(next);
+      current = next;
+      continue;
+    }
+    current.push(trimmed);
+  }
+
+  const filteredMain = mainLines.filter(
+    (line) => !lineReferencesMergedRecipeTitle(line, mergedTitles)
+  );
+  const mergedFlat = mergedBlocks.flat();
+  return [...filteredMain, ...mergedFlat].join("\n");
+}
+
 export function parseIngredientLine(line: string): ParsedIngredient | null {
   const original = line;
   let text = normalizeUnicodeFractions(line).trim();
   if (!text) return null;
+
+  if (MERGED_SECTION_HEADING_RE.test(text)) {
+    return null;
+  }
 
   // Skip section headers and comments.
   const lower = text.toLowerCase();
@@ -262,7 +360,9 @@ export function consolidateIngredients(
   const byKey = new Map<string, AggregatedIngredient>();
 
   for (const source of sources) {
-    const parsed = parseIngredientsText(source.ingredientsText);
+    const parsed = parseIngredientsText(
+      expandMergedRecipeIngredientsText(source.ingredientsText)
+    );
     for (const ing of parsed) {
       const nameKey = buildNameKey(ing);
       const unitKey = normalizeUnit(ing.unit ?? undefined);
