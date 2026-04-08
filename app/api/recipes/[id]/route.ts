@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUserFromRequest } from "@/lib/auth";
 
 const CATEGORIES = [
   "breakfast",
@@ -22,12 +23,14 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const user = await getCurrentUserFromRequest(_request);
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const id = parseId((await params).id);
   if (id == null) {
     return NextResponse.json({ error: "Invalid id" }, { status: 400 });
   }
   try {
-    const recipe = await prisma.recipe.findUnique({ where: { id } });
+    const recipe = await prisma.recipe.findFirst({ where: { id, userId: user.id } });
     if (!recipe) {
       return NextResponse.json({ error: "Recipe not found" }, { status: 404 });
     }
@@ -45,6 +48,8 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const user = await getCurrentUserFromRequest(request);
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const id = parseId((await params).id);
   if (id == null) {
     return NextResponse.json({ error: "Invalid id" }, { status: 400 });
@@ -97,11 +102,13 @@ export async function PATCH(
     }
     if (tags !== undefined) data.tags = String(tags).trim();
 
-    const recipe = await prisma.recipe.update({
+    const recipe = await prisma.recipe.findFirst({ where: { id, userId: user.id } });
+    if (!recipe) return NextResponse.json({ error: "Recipe not found" }, { status: 404 });
+    const updated = await prisma.recipe.update({
       where: { id },
       data,
     });
-    return NextResponse.json(recipe);
+    return NextResponse.json(updated);
   } catch (e) {
     if (e && typeof e === "object" && "code" in e && (e as { code: string }).code === "P2025") {
       return NextResponse.json({ error: "Recipe not found" }, { status: 404 });
@@ -118,11 +125,15 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const user = await getCurrentUserFromRequest(_request);
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const id = parseId((await params).id);
   if (id == null) {
     return NextResponse.json({ error: "Invalid id" }, { status: 400 });
   }
   try {
+    const recipe = await prisma.recipe.findFirst({ where: { id, userId: user.id } });
+    if (!recipe) return NextResponse.json({ error: "Recipe not found" }, { status: 404 });
     await prisma.recipe.delete({ where: { id } });
     return new NextResponse(null, { status: 204 });
   } catch (e) {

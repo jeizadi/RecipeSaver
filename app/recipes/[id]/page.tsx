@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/require-user";
 
 const CATEGORIES: Record<string, string> = {
   breakfast: "Breakfast",
@@ -19,10 +20,11 @@ export default async function RecipePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const user = await requireUser();
   const id = parseInt((await params).id, 10);
   if (!Number.isFinite(id)) notFound();
 
-  const recipe = await prisma.recipe.findUnique({ where: { id } });
+  const recipe = await prisma.recipe.findFirst({ where: { id, userId: user.id } });
   if (!recipe) notFound();
 
   const categoryLabel = CATEGORIES[recipe.category] ?? recipe.category;

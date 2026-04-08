@@ -3,8 +3,13 @@ import {
   importRecipeFromUrl,
   RecipeImportError,
 } from "@/lib/import-recipe";
+import { getCurrentUserFromRequest } from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
+  const user = await getCurrentUserFromRequest(request);
+  if (!user) {
+    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
   let body: { url?: string };
   try {
     body = await request.json();

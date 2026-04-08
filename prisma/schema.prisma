@@ -13,6 +13,7 @@ datasource db {
 
 model Recipe {
   id                 Int       @id @default(autoincrement())
+  userId             Int?      @map("user_id")
   title              String
   sourceUrl          String    @map("source_url")
   description        String    @default("")
@@ -28,6 +29,178 @@ model Recipe {
   tags               String    @default("") @map("tags")
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")
+  feature            RecipeFeature?
+  feedback           RecipeFeedback[]
+  suggestionItems    SuggestionItem[]
+  user               AppUser?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  weeklyMeals        WeeklyMealPlan[]
 
+  @@index([userId, createdAt])
   @@map("recipes")
+}
+
+enum FeedbackSignal {
+  like
+  dislike
+  skip
+  add_to_plan
+  cooked
+  rate
+}
+
+model UserProfile {
+  id                   Int       @id @default(autoincrement())
+  userId               Int?      @unique @map("user_id")
+  name                 String    @default("default")
+  dietaryRestrictions  String    @default("")
+  fitnessGoal          String    @default("")
+  calorieTarget        Int?
+  proteinTarget        Int?
+  carbTarget           Int?
+  fatTarget            Int?
+  preferredDomains     String    @default("")
+  blockedDomains       String    @default("")
+  favoriteIngredients  String    @default("")
+  dislikedIngredients  String    @default("")
+  explorationRatio     Float     @default(0.35)
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+  runs                 SuggestionRun[]
+  user                 AppUser?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([name])
+  @@map("user_profiles")
+}
+
+model AppUser {
+  id            Int            @id @default(autoincrement())
+  email         String         @unique
+  name          String         @default("")
+  passwordHash  String         @map("password_hash")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  sessions      UserSession[]
+  recipes       Recipe[]
+  profile       UserProfile?
+  weeklyMeals   WeeklyMealPlan[]
+
+  @@map("app_users")
+}
+
+model UserSession {
+  id          Int       @id @default(autoincrement())
+  token       String    @unique
+  userId      Int       @map("user_id")
+  user        AppUser   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt   DateTime  @map("expires_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([userId, expiresAt])
+  @@map("user_sessions")
+}
+
+enum WeeklyMealStatus {
+  planned
+  cooked
+  skipped
+}
+
+model WeeklyMealPlan {
+  id                 Int             @id @default(autoincrement())
+  userId             Int             @map("user_id")
+  user               AppUser         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipeId           Int             @map("recipe_id")
+  recipe             Recipe          @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  plannedFor         DateTime        @map("planned_for")
+  status             WeeklyMealStatus @default(planned)
+  rating             Int?
+  notes              String          @default("")
+  reminderEmailSentAt DateTime?      @map("reminder_email_sent_at")
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
+
+  @@index([userId, plannedFor])
+  @@index([recipeId, plannedFor])
+  @@map("weekly_meal_plans")
+}
+
+model RecipeFeature {
+  id                    Int      @id @default(autoincrement())
+  recipeId              Int      @unique @map("recipe_id")
+  sourceDomain          String   @default("") @map("source_domain")
+  normalizedIngredients String   @default("") @map("normalized_ingredients")
+  normalizedTags        String   @default("") @map("normalized_tags")
+  calories              Int?
+  protein               Int?
+  carbs                 Int?
+  fat                   Int?
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+  recipe                Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  @@index([sourceDomain])
+  @@map("recipe_features")
+}
+
+model RecipeFeedback {
+  id          Int            @id @default(autoincrement())
+  recipeId    Int?           @map("recipe_id")
+  recipe      Recipe?        @relation(fields: [recipeId], references: [id], onDelete: SetNull)
+  candidateUrl String?       @map("candidate_url")
+  sourceDomain String        @default("") @map("source_domain")
+  signal      FeedbackSignal
+  rating      Int?
+  note        String         @default("")
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  @@index([recipeId, createdAt])
+  @@index([sourceDomain, createdAt])
+  @@map("recipe_feedback")
+}
+
+model SuggestionRun {
+  id          Int              @id @default(autoincrement())
+  profileId   Int              @map("profile_id")
+  profile     UserProfile      @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  inputJson   String           @default("") @map("input_json")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  items       SuggestionItem[]
+
+  @@index([profileId, createdAt])
+  @@map("suggestion_runs")
+}
+
+model SuggestionItem {
+  id            Int           @id @default(autoincrement())
+  runId         Int           @map("run_id")
+  run           SuggestionRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  recipeId      Int?          @map("recipe_id")
+  recipe        Recipe?       @relation(fields: [recipeId], references: [id], onDelete: SetNull)
+  candidateUrl  String?       @map("candidate_url")
+  sourceDomain  String        @default("") @map("source_domain")
+  title         String
+  score         Float         @default(0)
+  reasonJson    String        @default("") @map("reason_json")
+
+  @@index([runId, score])
+  @@index([recipeId])
+  @@map("suggestion_items")
+}
+
+model WebRecipeCandidate {
+  id             Int      @id @default(autoincrement())
+  sourceUrl      String   @unique @map("source_url")
+  sourceDomain   String   @default("") @map("source_domain")
+  title          String
+  description    String   @default("")
+  ingredientsText String  @default("") @map("ingredients_text")
+  category       String   @default("other")
+  tags           String   @default("")
+  confidence     Float    @default(0) // parser/import confidence heuristic
+  importedRecipeId Int?   @map("imported_recipe_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([sourceDomain, confidence])
+  @@map("web_recipe_candidates")
 }

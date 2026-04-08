@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type RecipeSummary = {
   id: number;
@@ -13,6 +13,20 @@ type RecipeSummary = {
 
 type Props = {
   recipes: RecipeSummary[];
+};
+
+type SuggestionRow = {
+  rank: number;
+  recipeId: number | null;
+  sourceUrl: string | null;
+  sourceDomain: string;
+  title: string;
+  description: string;
+  category: string;
+  tags: string;
+  isWebCandidate: boolean;
+  score: number;
+  reasons: string[];
 };
 
 function findSauceLinks(recipes: RecipeSummary[]) {
@@ -48,6 +62,67 @@ export function WeeklyPlannerClient({ recipes }: Props) {
   const [useAiMerge, setUseAiMerge] = useState(false);
   const [mergeInfo, setMergeInfo] = useState<string | null>(null);
   const [mergeInfoIsError, setMergeInfoIsError] = useState(false);
+  const [profileName, setProfileName] = useState("default");
+  const [dietaryRestrictions, setDietaryRestrictions] = useState("");
+  const [fitnessGoal, setFitnessGoal] = useState("");
+  const [preferredDomains, setPreferredDomains] = useState("");
+  const [blockedDomains, setBlockedDomains] = useState("");
+  const [favoriteIngredients, setFavoriteIngredients] = useState("");
+  const [dislikedIngredients, setDislikedIngredients] = useState("");
+  const [explorationRatio, setExplorationRatio] = useState(0.35);
+  const [suggestionLimit, setSuggestionLimit] = useState(10);
+  const [includeWebCandidates, setIncludeWebCandidates] = useState(true);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [suggestionsError, setSuggestionsError] = useState<string | null>(null);
+  const [suggestionsInfo, setSuggestionsInfo] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<SuggestionRow[]>([]);
+  const [feedbackBusyKey, setFeedbackBusyKey] = useState<string | null>(null);
+  const [plannedForDate, setPlannedForDate] = useState("");
+  const [weeklyPlans, setWeeklyPlans] = useState<
+    { id: number; recipeId: number; plannedFor: string; status: string; rating: number | null; recipe: { id: number; title: string } }[]
+  >([]);
+
+  const recipeById = useMemo(() => {
+    const m = new Map<number, RecipeSummary>();
+    for (const r of recipes) m.set(r.id, r);
+    return m;
+  }, [recipes]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadProfile() {
+      try {
+        const res = await fetch(
+          `/api/suggestions/profile?profileName=${encodeURIComponent(profileName)}`
+        );
+        const data = await res.json();
+        if (!data.ok || !data.profile || cancelled) return;
+        const p = data.profile;
+        setDietaryRestrictions((p.dietaryRestrictions ?? []).join(", "));
+        setFitnessGoal(p.fitnessGoal ?? "");
+        setPreferredDomains((p.preferredDomains ?? []).join(", "));
+        setBlockedDomains((p.blockedDomains ?? []).join(", "));
+        setFavoriteIngredients((p.favoriteIngredients ?? []).join(", "));
+        setDislikedIngredients((p.dislikedIngredients ?? []).join(", "));
+        setExplorationRatio(
+          typeof p.explorationRatio === "number" ? p.explorationRatio : 0.35
+        );
+      } catch {
+        // ignore profile load failure in client
+      }
+    }
+    loadProfile();
+    return () => {
+      cancelled = true;
+    };
+  }, [profileName]);
+
+  useEffect(() => {
+    fetch("/api/weekly-plan")
+      .then((r) => r.json())
+      .then((d) => setWeeklyPlans(d.items ?? []))
+      .catch(() => undefined);
+  }, []);
 
   const sauceLinksByRecipe = useMemo(
     () => findSauceLinks(recipes),
@@ -149,6 +224,143 @@ export function WeeklyPlannerClient({ recipes }: Props) {
     } catch {
       // ignore; user can still select manually
     }
+  }
+
+  function parseCsv(text: string): string[] {
+    return text
+      .split(",")
+      .map((x) => x.trim().toLowerCase())
+      .filter(Boolean);
+  }
+
+  async function handleSaveSuggestionProfile() {
+    setSuggestionsError(null);
+    setSuggestionsInfo(null);
+    try {
+      const res = await fetch("/api/suggestions/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          profileName,
+          dietaryRestrictions: parseCsv(dietaryRestrictions),
+          fitnessGoal,
+          preferredDomains: parseCsv(preferredDomains),
+          blockedDomains: parseCsv(blockedDomains),
+          favoriteIngredients: parseCsv(favoriteIngredients),
+          dislikedIngredients: parseCsv(dislikedIngredients),
+          explorationRatio,
+        }),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        setSuggestionsError(data.error ?? "Failed to save suggestion profile.");
+        return;
+      }
+      setSuggestionsInfo("Preferences saved.");
+    } catch {
+      setSuggestionsError("Failed to save suggestion profile.");
+    }
+  }
+
+  async function handleGenerateSuggestions() {
+    setSuggestionsLoading(true);
+    setSuggestionsError(null);
+    setSuggestionsInfo(null);
+    try {
+      await handleSaveSuggestionProfile();
+      const res = await fetch("/api/suggestions/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          profileName,
+          limit: suggestionLimit,
+          includeWebCandidates,
+        }),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        setSuggestionsError(data.error ?? "Failed to generate suggestions.");
+        setSuggestions([]);
+        return;
+      }
+      setSuggestions(data.suggestions ?? []);
+      setSuggestionsInfo(
+        `Ranked ${data.totals?.returned ?? 0} suggestions from ${data.totals?.passedFilters ?? 0} candidates.`
+      );
+    } catch {
+      setSuggestionsError("Failed to generate suggestions.");
+      setSuggestions([]);
+    } finally {
+      setSuggestionsLoading(false);
+    }
+  }
+
+  async function sendFeedback(
+    item: SuggestionRow,
+    signal: "like" | "dislike" | "skip" | "add_to_plan" | "cooked"
+  ) {
+    const key = `${signal}-${item.recipeId ?? item.sourceUrl ?? item.title}`;
+    setFeedbackBusyKey(key);
+    try {
+      await fetch("/api/suggestions/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipeId: item.recipeId,
+          sourceUrl: item.sourceUrl,
+          sourceDomain: item.sourceDomain,
+          signal,
+        }),
+      });
+    } finally {
+      setFeedbackBusyKey(null);
+    }
+  }
+
+  async function addSuggestionToWeek(item: SuggestionRow) {
+    if (item.recipeId != null && recipeById.has(item.recipeId)) {
+      setSelectedIds((prev) =>
+        prev.includes(item.recipeId as number) ? prev : [...prev, item.recipeId as number]
+      );
+      setSuggestionsInfo(`Added "${item.title}" to this week's plan.`);
+      await sendFeedback(item, "add_to_plan");
+      return;
+    }
+    setSuggestionsInfo(
+      "This suggestion is from outside the visible recipe list. Import/save it first to add directly to the weekly plan."
+    );
+  }
+
+  async function addSelectedToWeek() {
+    if (!plannedForDate) {
+      setSuggestionsError("Choose a date first for weekly planning.");
+      return;
+    }
+    for (const id of selectedIds) {
+      await fetch("/api/weekly-plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipeId: id, plannedFor: plannedForDate }),
+      });
+    }
+    const res = await fetch("/api/weekly-plan");
+    const data = await res.json().catch(() => ({ items: [] }));
+    setWeeklyPlans(data.items ?? []);
+    setSuggestionsInfo("Added selected recipes to weekly tracker.");
+  }
+
+  async function updateWeeklyStatus(
+    id: number,
+    patch: { status?: "planned" | "cooked" | "skipped"; rating?: number }
+  ) {
+    await fetch("/api/weekly-plan", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, ...patch }),
+    });
+    const res = await fetch("/api/weekly-plan");
+    const data = await res.json().catch(() => ({ items: [] }));
+    setWeeklyPlans(data.items ?? []);
   }
 
   function clearPlan() {
@@ -327,6 +539,215 @@ export function WeeklyPlannerClient({ recipes }: Props) {
             />
           </div>
         )}
+
+        <div className="mt-4 border-t border-[#eadfce] pt-4">
+          <h3 className="mb-2 text-sm font-semibold">Weekly tracker</h3>
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={plannedForDate}
+              onChange={(e) => setPlannedForDate(e.target.value)}
+              className="rounded border border-[#d2c2af] px-2 py-1 text-xs"
+            />
+            <button
+              type="button"
+              onClick={addSelectedToWeek}
+              className="rounded border border-[#d2c2af] bg-white px-2 py-1 text-xs hover:bg-[#f6efe9]"
+            >
+              Add selected to week
+            </button>
+          </div>
+          {weeklyPlans.length > 0 && (
+            <ul className="mt-2 space-y-1 text-xs">
+              {weeklyPlans.slice(0, 8).map((w) => (
+                <li key={w.id} className="rounded border border-[#e0d4c7] bg-[#fffdf8] p-2">
+                  <p className="font-medium">{w.recipe.title}</p>
+                  <p className="text-[#7f8c8d]">{new Date(w.plannedFor).toDateString()} · {w.status}</p>
+                  <div className="mt-1 flex gap-2">
+                    <button className="underline" onClick={() => updateWeeklyStatus(w.id, { status: "cooked" })}>Cooked</button>
+                    <button className="underline" onClick={() => updateWeeklyStatus(w.id, { status: "skipped" })}>Skipped</button>
+                    <button className="underline" onClick={() => updateWeeklyStatus(w.id, { rating: 5 })}>Rate 5</button>
+                    <button className="underline" onClick={() => updateWeeklyStatus(w.id, { rating: 3 })}>Rate 3</button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="mt-4 border-t border-[#eadfce] pt-4">
+          <h3 className="mb-2 text-sm font-semibold">Recipe suggestions</h3>
+          <div className="space-y-2">
+            <label className="block text-xs">
+              <span className="mb-1 block text-[#7f8c8d]">Profile name</span>
+              <input
+                type="text"
+                value={profileName}
+                onChange={(e) => setProfileName(e.target.value)}
+                className="w-full rounded border border-[#d2c2af] px-2 py-1"
+              />
+            </label>
+            <label className="block text-xs">
+              <span className="mb-1 block text-[#7f8c8d]">
+                Dietary restrictions (comma-separated)
+              </span>
+              <input
+                type="text"
+                value={dietaryRestrictions}
+                onChange={(e) => setDietaryRestrictions(e.target.value)}
+                placeholder="vegan, gluten-free, nut-free"
+                className="w-full rounded border border-[#d2c2af] px-2 py-1"
+              />
+            </label>
+            <label className="block text-xs">
+              <span className="mb-1 block text-[#7f8c8d]">Fitness goal</span>
+              <input
+                type="text"
+                value={fitnessGoal}
+                onChange={(e) => setFitnessGoal(e.target.value)}
+                placeholder="high protein, low carb"
+                className="w-full rounded border border-[#d2c2af] px-2 py-1"
+              />
+            </label>
+            <label className="block text-xs">
+              <span className="mb-1 block text-[#7f8c8d]">Preferred domains</span>
+              <input
+                type="text"
+                value={preferredDomains}
+                onChange={(e) => setPreferredDomains(e.target.value)}
+                placeholder="smittenkitchen.com, budgetbytes.com"
+                className="w-full rounded border border-[#d2c2af] px-2 py-1"
+              />
+            </label>
+            <label className="block text-xs">
+              <span className="mb-1 block text-[#7f8c8d]">Blocked domains</span>
+              <input
+                type="text"
+                value={blockedDomains}
+                onChange={(e) => setBlockedDomains(e.target.value)}
+                placeholder="example.com"
+                className="w-full rounded border border-[#d2c2af] px-2 py-1"
+              />
+            </label>
+            <label className="block text-xs">
+              <span className="mb-1 block text-[#7f8c8d]">Favorite ingredients</span>
+              <input
+                type="text"
+                value={favoriteIngredients}
+                onChange={(e) => setFavoriteIngredients(e.target.value)}
+                placeholder="chickpeas, spinach, feta"
+                className="w-full rounded border border-[#d2c2af] px-2 py-1"
+              />
+            </label>
+            <label className="block text-xs">
+              <span className="mb-1 block text-[#7f8c8d]">Disliked ingredients</span>
+              <input
+                type="text"
+                value={dislikedIngredients}
+                onChange={(e) => setDislikedIngredients(e.target.value)}
+                placeholder="mushrooms, olives"
+                className="w-full rounded border border-[#d2c2af] px-2 py-1"
+              />
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="text-xs">
+                <span className="mb-1 block text-[#7f8c8d]">Exploration</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={explorationRatio}
+                  onChange={(e) => setExplorationRatio(Number(e.target.value))}
+                  className="w-full rounded border border-[#d2c2af] px-2 py-1"
+                />
+              </label>
+              <label className="text-xs">
+                <span className="mb-1 block text-[#7f8c8d]">Suggestion count</span>
+                <input
+                  type="number"
+                  min={4}
+                  max={20}
+                  value={suggestionLimit}
+                  onChange={(e) => setSuggestionLimit(Number(e.target.value))}
+                  className="w-full rounded border border-[#d2c2af] px-2 py-1"
+                />
+              </label>
+            </div>
+            <label className="flex items-center gap-2 text-xs text-[#5b3b2a]">
+              <input
+                type="checkbox"
+                checked={includeWebCandidates}
+                onChange={(e) => setIncludeWebCandidates(e.target.checked)}
+              />
+              Include open-web candidates
+            </label>
+            <button
+              type="button"
+              onClick={handleGenerateSuggestions}
+              disabled={suggestionsLoading}
+              className="w-full rounded bg-[#5b3b2a] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#4b3022] disabled:opacity-60"
+            >
+              {suggestionsLoading ? "Ranking suggestions…" : "Suggest recipes"}
+            </button>
+            {suggestionsError && (
+              <p className="text-xs text-[#c0392b]">{suggestionsError}</p>
+            )}
+            {suggestionsInfo && (
+              <p className="text-xs text-[#7f8c8d]">{suggestionsInfo}</p>
+            )}
+            {suggestions.length > 0 && (
+              <ul className="space-y-2">
+                {suggestions.map((s) => (
+                  <li key={`${s.recipeId ?? "web"}-${s.rank}-${s.title}`} className="rounded border border-[#eadfce] bg-[#fffdf8] p-2">
+                    <p className="text-xs font-medium">
+                      #{s.rank} {s.title}
+                    </p>
+                    <p className="text-[11px] text-[#7f8c8d]">
+                      {s.sourceDomain || "unknown source"} · score {s.score.toFixed(2)}
+                    </p>
+                    <p className="mt-1 text-[11px] text-[#5b3b2a]">
+                      {s.reasons.join(" · ")}
+                    </p>
+                    <div className="mt-1 flex flex-wrap gap-2 text-[11px]">
+                      <button
+                        type="button"
+                        onClick={() => addSuggestionToWeek(s)}
+                        className="underline"
+                      >
+                        Add to week
+                      </button>
+                      <button
+                        type="button"
+                        disabled={feedbackBusyKey === `like-${s.recipeId ?? s.sourceUrl ?? s.title}`}
+                        onClick={() => sendFeedback(s, "like")}
+                        className="underline"
+                      >
+                        Like
+                      </button>
+                      <button
+                        type="button"
+                        disabled={feedbackBusyKey === `dislike-${s.recipeId ?? s.sourceUrl ?? s.title}`}
+                        onClick={() => sendFeedback(s, "dislike")}
+                        className="underline"
+                      >
+                        Dislike
+                      </button>
+                      <button
+                        type="button"
+                        disabled={feedbackBusyKey === `skip-${s.recipeId ?? s.sourceUrl ?? s.title}`}
+                        onClick={() => sendFeedback(s, "skip")}
+                        className="underline"
+                      >
+                        Skip
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
       </aside>
     </div>
   );

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { appendMergedRecipeBlocks } from "@/lib/merge-recipe-text";
+import { getCurrentUserFromRequest } from "@/lib/auth";
 
 function parseId(id: string): number | null {
   const n = parseInt(id, 10);
@@ -16,6 +17,8 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const user = await getCurrentUserFromRequest(request);
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const parentId = parseId((await params).id);
   if (parentId == null) {
     return NextResponse.json({ error: "Invalid id" }, { status: 400 });
@@ -53,15 +56,15 @@ export async function POST(
     typeof body.instructionsText === "string" ? body.instructionsText : "";
 
   try {
-    const parent = await prisma.recipe.findUnique({
-      where: { id: parentId },
+    const parent = await prisma.recipe.findFirst({
+      where: { id: parentId, userId: user.id },
       select: { id: true },
     });
     if (!parent) {
       return NextResponse.json({ error: "Recipe not found" }, { status: 404 });
     }
 
-    const child = await prisma.recipe.findUnique({ where: { id: childId } });
+    const child = await prisma.recipe.findFirst({ where: { id: childId, userId: user.id } });
     if (!child) {
       return NextResponse.json(
         { error: "Recipe to merge was not found" },

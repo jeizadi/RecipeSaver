@@ -5,8 +5,15 @@ import {
 } from "@/lib/import-recipe";
 import { appendMergedRecipeBlocks } from "@/lib/merge-recipe-text";
 import { normalizeUrlForMatch } from "@/lib/recipe-link-heuristics";
+import { getCurrentUserFromRequest } from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
+  const user = await getCurrentUserFromRequest(request);
+  if (!user) {
+    return NextResponse.json({ ok: false, error: "Unauthorized" }, {
+      status: 401,
+    });
+  }
   let body: {
     url?: unknown;
     ingredientsText?: unknown;

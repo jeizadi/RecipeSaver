@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUserFromRequest } from "@/lib/auth";
 import {
   collectUrlsFromIngredientsText,
   extractSameSiteRecipeLinksFromIngredientSectionsHtml,
@@ -57,6 +58,8 @@ function pickBestSourceUrlMatch(
 }
 
 export async function POST(request: NextRequest) {
+  const user = await getCurrentUserFromRequest(request);
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   let body: {
     ingredientsText?: unknown;
     instructionsText?: unknown;
@@ -129,7 +132,10 @@ export async function POST(request: NextRequest) {
   ];
 
   const allRecipes = await prisma.recipe.findMany({
-    where: excludeId != null ? { id: { not: excludeId } } : undefined,
+    where:
+      excludeId != null
+        ? { userId: user.id, id: { not: excludeId } }
+        : { userId: user.id },
     select: { id: true, title: true, sourceUrl: true },
   });
 

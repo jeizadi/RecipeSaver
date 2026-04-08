@@ -6,6 +6,7 @@ import {
 } from "@/lib/ingredients";
 import { importRecipeFromUrl } from "@/lib/import-recipe";
 import { refineAggregatedItemsWithLlm } from "@/lib/shopping-list-llm";
+import { getCurrentUserFromRequest } from "@/lib/auth";
 
 type RequestBody = {
   recipeIds?: number[];
@@ -15,6 +16,10 @@ type RequestBody = {
 };
 
 export async function POST(request: NextRequest) {
+  const user = await getCurrentUserFromRequest(request);
+  if (!user) {
+    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
   let body: RequestBody;
   try {
     body = await request.json();
@@ -59,7 +64,7 @@ export async function POST(request: NextRequest) {
 
     if (recipeIds.length) {
       const recipes = await prisma.recipe.findMany({
-        where: { id: { in: recipeIds } },
+        where: { id: { in: recipeIds }, userId: user.id },
         select: {
           id: true,
           title: true,
