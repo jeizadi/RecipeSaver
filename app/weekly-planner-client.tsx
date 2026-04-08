@@ -124,6 +124,18 @@ export function WeeklyPlannerClient({ recipes }: Props) {
     }
   }
 
+  function clearPlan() {
+    setSelectedIds([]);
+    setSelectedSauceUrls([]);
+    setClipboardText("");
+    setError(null);
+  }
+
+  const hasPlan =
+    selectedIds.length > 0 ||
+    selectedSauceUrls.length > 0 ||
+    Boolean(clipboardText);
+
   return (
     <div className="flex flex-col gap-6 lg:flex-row">
       <div className="flex-1">
@@ -168,7 +180,18 @@ export function WeeklyPlannerClient({ recipes }: Props) {
       </div>
 
       <aside className="w-full max-w-md rounded-lg bg-white p-4 shadow-sm lg:w-80">
-        <h3 className="mb-2 text-sm font-semibold">This week&apos;s plan</h3>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold">This week&apos;s plan</h3>
+          {hasPlan && (
+            <button
+              type="button"
+              onClick={clearPlan}
+              className="text-xs text-[#7f8c8d] underline hover:text-[#5b3b2a]"
+            >
+              Clear plan
+            </button>
+          )}
+        </div>
         {selectedRecipes.length ? (
           <ul className="mb-3 list-disc list-inside text-sm">
             {selectedRecipes.map((r) => (
@@ -229,7 +252,7 @@ export function WeeklyPlannerClient({ recipes }: Props) {
 
         {clipboardText && (
           <div className="space-y-1">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-xs font-medium">
                 Shopping list (copy to Keep)
               </span>
