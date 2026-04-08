@@ -1,21 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { appendMergedRecipeBlocks } from "@/lib/merge-recipe-text";
 
 function parseId(id: string): number | null {
   const n = parseInt(id, 10);
   return Number.isFinite(n) ? n : null;
-}
-
-function joinSection(
-  existing: string,
-  heading: string,
-  addition: string
-): string {
-  const a = existing.trim();
-  const b = addition.trim();
-  if (!b) return a;
-  if (!a) return `${heading}\n${b}`;
-  return `${a}\n\n${heading}\n${b}`;
 }
 
 /**
@@ -80,16 +69,11 @@ export async function POST(
       );
     }
 
-    const heading = `--- ${child.title} (merged) ---`;
-
-    const ingredientsText = joinSection(
+    const { ingredientsText, instructionsText } = appendMergedRecipeBlocks(
       parentIngredients,
-      heading,
-      child.ingredientsText
-    );
-    const instructionsText = joinSection(
       parentInstructions,
-      heading,
+      child.title,
+      child.ingredientsText,
       child.instructionsText
     );
 

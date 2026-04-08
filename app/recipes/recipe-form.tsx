@@ -120,6 +120,41 @@ export function RecipeForm({
     }
   }
 
+  async function handleMergeLinkedFromUrl(url: string) {
+    const ok = window.confirm(
+      "Import this recipe from the link and append it below your current ingredients and instructions?\n\nNothing is saved until you click Save."
+    );
+    if (!ok) return;
+    const res = await fetch("/api/recipes/merge-from-url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url,
+        ingredientsText: form.ingredientsText,
+        instructionsText: form.instructionsText,
+        ...(form.sourceUrl.trim().startsWith("http://") ||
+        form.sourceUrl.trim().startsWith("https://")
+          ? { sourceUrl: form.sourceUrl.trim() }
+          : {}),
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!data.ok) {
+      setStatus(data.error ?? "Merge failed.");
+      setStatusError(true);
+      return;
+    }
+    setForm((prev) => ({
+      ...prev,
+      ingredientsText: data.ingredientsText ?? prev.ingredientsText,
+      instructionsText: data.instructionsText ?? prev.instructionsText,
+    }));
+    setStatus(
+      `Merged “${data.mergedTitle ?? "recipe"}” into this recipe. Review and click Save.`
+    );
+    setStatusError(false);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -204,6 +239,11 @@ export function RecipeForm({
         onMergeFromLibrary={
           recipeId != null
             ? async (childRecipeId, mergedTitle) => {
+                const ok = window.confirm(
+                  `Merge “${mergedTitle}” from your library into this recipe?\n\n` +
+                    "Its ingredients and instructions will be appended with a heading. Nothing is saved until you click Save."
+                );
+                if (!ok) return;
                 const res = await fetch(`/api/recipes/${recipeId}/merge`, {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
@@ -232,6 +272,7 @@ export function RecipeForm({
               }
             : undefined
         }
+        onMergeFromUrl={handleMergeLinkedFromUrl}
       />
 
       {recipeId != null && (

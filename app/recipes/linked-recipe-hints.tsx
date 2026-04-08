@@ -22,6 +22,8 @@ type Props = {
     childRecipeId: number,
     mergedTitle: string
   ) => Promise<void> | void;
+  /** Import a recipe from a URL and append it (works before Save / without a recipe id) */
+  onMergeFromUrl?: (url: string) => Promise<void> | void;
 };
 
 function hintLabel(c: Candidate): string {
@@ -41,6 +43,7 @@ export function LinkedRecipeHints({
   ingredientsText,
   instructionsText,
   onMergeFromLibrary,
+  onMergeFromUrl,
 }: Props) {
   const [candidates, setCandidates] = useState<Candidate[] | null>(null);
   const [samePageMention, setSamePageMention] = useState(false);
@@ -48,6 +51,7 @@ export function LinkedRecipeHints({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mergingId, setMergingId] = useState<number | null>(null);
+  const [mergingUrl, setMergingUrl] = useState<string | null>(null);
 
   const scan = useCallback(async () => {
     setLoading(true);
@@ -157,33 +161,42 @@ export function LinkedRecipeHints({
 
       {candidates && candidates.length > 0 && (
         <ul className="mt-3 space-y-2 text-sm">
-          {candidates.map((c) => (
-            <li
-              key={c.url}
-              className="rounded border border-[#e0d4c7] bg-white p-2"
-            >
-              <p className="text-xs font-medium text-[#5b3b2a]">
-                {hintLabel(c)}
-              </p>
-              <a
-                href={c.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-0.5 block truncate text-xs text-[#e67e22] hover:underline"
+          {candidates.map((c) => {
+            const mergeUrl = c.matchedRecipe?.sourceUrl ?? c.url;
+            const showLibraryMerge =
+              c.hint === "in_your_library" &&
+              c.matchedRecipe != null &&
+              parentRecipeId != null &&
+              onMergeFromLibrary != null;
+            const showUrlMerge = onMergeFromUrl != null && !showLibraryMerge;
+            const urlBusy = mergingUrl === mergeUrl;
+
+            return (
+              <li
+                key={c.url}
+                className="rounded border border-[#e0d4c7] bg-white p-2"
               >
-                {c.url}
-              </a>
-              {c.hint === "in_your_library" &&
-                c.matchedRecipe &&
-                parentRecipeId != null &&
-                onMergeFromLibrary && (
+                <p className="text-xs font-medium text-[#5b3b2a]">
+                  {hintLabel(c)}
+                </p>
+                <a
+                  href={c.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-0.5 block truncate text-xs text-[#e67e22] hover:underline"
+                >
+                  {c.url}
+                </a>
+                {showLibraryMerge && (
                   <button
                     type="button"
-                    disabled={mergingId === c.matchedRecipe.id}
+                    disabled={
+                      mergingId === c.matchedRecipe!.id || mergingUrl != null
+                    }
                     onClick={async () => {
                       setMergingId(c.matchedRecipe!.id);
                       try {
-                        await onMergeFromLibrary(
+                        await onMergeFromLibrary!(
                           c.matchedRecipe!.id,
                           c.matchedRecipe!.title
                         );
@@ -193,28 +206,50 @@ export function LinkedRecipeHints({
                     }}
                     className="mt-2 rounded bg-[#e67e22] px-2 py-1 text-xs font-medium text-white hover:bg-[#cf711f] disabled:opacity-60"
                   >
-                    {mergingId === c.matchedRecipe.id
+                    {mergingId === c.matchedRecipe!.id
                       ? "Merging…"
-                      : "Merge into this recipe"}
+                      : "Merge from library"}
                   </button>
                 )}
-              {c.hint === "in_your_library" &&
-                c.matchedRecipe &&
-                parentRecipeId == null && (
-                  <p className="mt-2 text-xs text-[#7f8c8d]">
-                    Save this recipe first, then edit it to merge “
-                    {c.matchedRecipe.title}”.
+                {showUrlMerge && (
+                  <button
+                    type="button"
+                    disabled={urlBusy || mergingId != null}
+                    onClick={async () => {
+                      setMergingUrl(mergeUrl);
+                      try {
+                        await onMergeFromUrl!(mergeUrl);
+                      } finally {
+                        setMergingUrl(null);
+                      }
+                    }}
+                    className="mt-2 rounded bg-[#e67e22] px-2 py-1 text-xs font-medium text-white hover:bg-[#cf711f] disabled:opacity-60"
+                  >
+                    {urlBusy ? "Importing…" : "Merge into this recipe"}
+                  </button>
+                )}
+                {showUrlMerge && (
+                  <p className="mt-1 text-xs text-[#7f8c8d]">
+                    Fetches that page and appends its ingredients and
+                    instructions below yours. Save when you’re done.
                   </p>
                 )}
-              {c.hint !== "in_your_library" && (
-                <p className="mt-1 text-xs text-[#7f8c8d]">
-                  Open the link to confirm it’s a full recipe. If you saved it
-                  already, re-scan after updating <code className="text-[11px]">source URL</code>{" "}
-                  to match.
-                </p>
-              )}
-            </li>
-          ))}
+                {c.hint === "in_your_library" &&
+                  !showLibraryMerge &&
+                  !showUrlMerge && (
+                    <p className="mt-2 text-xs text-[#7f8c8d]">
+                      Save this recipe first, then edit it to merge “
+                      {c.matchedRecipe!.title}”.
+                    </p>
+                  )}
+                {c.hint !== "in_your_library" && !showUrlMerge && (
+                  <p className="mt-1 text-xs text-[#7f8c8d]">
+                    Open the link to confirm it’s a full recipe.
+                  </p>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
 
