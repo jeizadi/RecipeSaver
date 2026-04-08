@@ -12,7 +12,7 @@ export type ParsedIngredient = {
 };
 
 export type AggregatedIngredient = {
-  /** Normalized key for grouping (lowercased, trimmed). */
+  /** Stable merge key from {@link ingredientFingerprint} (sorted letter-only tokens). */
   nameKey: string;
   /** Human-readable name to display. */
   displayName: string;
@@ -164,33 +164,107 @@ function stripMeasurementParentheticalsForShopping(text: string): string {
   return s.replace(/\s+/g, " ").trim();
 }
 
+const FINGERPRINT_STOP_TOKENS = new Set([
+  "a",
+  "an",
+  "and",
+  "as",
+  "at",
+  "but",
+  "by",
+  "for",
+  "from",
+  "in",
+  "into",
+  "low",
+  "no",
+  "not",
+  "of",
+  "off",
+  "on",
+  "or",
+  "per",
+  "so",
+  "the",
+  "to",
+  "up",
+  "via",
+  "with",
+]);
+
+/** Dropped for grouping when at least one other token remains (e.g. ground cinnamon → cinnamon). */
+const FINGERPRINT_DESCRIPTOR_TOKENS = new Set([
+  "all",
+  "chopped",
+  "coarse",
+  "crushed",
+  "diced",
+  "divided",
+  "extra",
+  "fine",
+  "finely",
+  "fresh",
+  "freshly",
+  "grated",
+  "ground",
+  "heaping",
+  "large",
+  "medium",
+  "minced",
+  "optional",
+  "organic",
+  "packed",
+  "pastry",
+  "purpose",
+  "roughly",
+  "sea",
+  "shredded",
+  "sifted",
+  "sliced",
+  "small",
+  "softened",
+  "virgin",
+  "warm",
+  "wheat",
+  "whole",
+  "kosher",
+]);
+
 /**
- * Map variant wordings to one merge bucket (after {@link buildNameKey}).
- * More specific patterns must come first.
+ * When "A or B" is written as alternatives, keep the leading phrase for grouping only if
+ * it looks like a full item (e.g. "apple cider vinegar or white vinegar" → first segment).
  */
-function canonicalMergeNameKey(nameKey: string): string {
-  const k = nameKey.trim();
-  const rules: Array<{ pattern: RegExp; key: string }> = [
-    {
-      pattern: /\bapple\s+cider\s+vinegar\b/,
-      key: "apple cider vinegar",
-    },
-    {
-      pattern:
-        /\bgreek\b.*\byogh?urt\b|\byogh?urt\b.*\bgreek\b/,
-      key: "greek yogurt",
-    },
-    { pattern: /\bblack\s+beans?\b/, key: "black beans" },
-    { pattern: /\bground\s+cumin\b/, key: "ground cumin" },
-    {
-      pattern: /\bground\s+chili\s+powder\b|\bchili\s+powder\b/,
-      key: "chili powder",
-    },
-  ];
-  for (const { pattern, key } of rules) {
-    if (pattern.test(k)) return key;
-  }
-  return k;
+function primaryAlternativeForFingerprint(nameLower: string): string {
+  const parts = nameLower.split(/\s+or\s+/i);
+  if (parts.length < 2) return nameLower;
+  const leadTokens = parts[0].trim().split(/\s+/).filter(Boolean);
+  if (leadTokens.length >= 2) return parts[0].trim();
+  return nameLower;
+}
+
+/**
+ * Stable merge key: letters-only tokens, punctuation and dashes removed, so
+ * "extra-virgin olive oil" and "extra virgin olive oil" both collapse the same way.
+ * Tokens are sorted so word order does not split duplicates.
+ */
+export function ingredientFingerprint(ing: ParsedIngredient): string {
+  let s = ing.name.toLowerCase();
+  s = s.replace(/\([^)]*\)/g, " ");
+  s = s.replace(/\(.*/g, " ");
+  s = primaryAlternativeForFingerprint(s);
+  s = s.replace(/\b(extra[-\s]+large|extra large|xl)\b/g, " ");
+  s = s.replace(/[^a-z]+/g, " ");
+  s = s.replace(/\s+/g, " ").trim();
+  if (!s) return "";
+
+  let tokens = s.split(" ").filter(Boolean);
+  tokens = tokens.filter((t) => !FINGERPRINT_STOP_TOKENS.has(t));
+  const withoutDesc = tokens.filter((t) => !FINGERPRINT_DESCRIPTOR_TOKENS.has(t));
+  if (withoutDesc.length > 0) tokens = withoutDesc;
+  if (tokens.length === 0) return "";
+
+  tokens.sort();
+  return tokens.join("");
 }
 
 /**
@@ -211,10 +285,10 @@ function rewriteLeadingHalfLine(line: string): string {
   return line;
 }
 
-/** Produce where a bare count ("1 lettuce") usually means heads. */
-function isHeadCountableProduce(nameKey: string): boolean {
-  return /\b(lettuce|cabbage|cauliflower|broccoli|romaine|iceberg|kale|bok\s+choy)\b/i.test(
-    nameKey
+/** Produce where a bare count ("1 lettuce") usually means heads (see {@link ingredientFingerprint}). */
+function isHeadCountableProduce(nameFingerprint: string): boolean {
+  return /(lettuce|cabbage|cauliflower|broccoli|romaine|iceberg|kale|bokchoy)/.test(
+    nameFingerprint
   );
 }
 
@@ -226,6 +300,11 @@ function normalizeParsedForConsolidation(
 ): ParsedIngredient {
   const { quantity, unit } = ing;
   let name = ing.name;
+  const pinchOf = name.match(/^(?:a\s+)?pinch(?:es)?\s+of\s+(.+)$/i);
+  if (pinchOf && (unit == null || unit === "pinch")) {
+    name = pinchOf[1].trim();
+    return { ...ing, name, unit: "pinch", quantity: quantity ?? 1 };
+  }
   if (unit === "head" || unit === "clove" || unit === "bunch") {
     name = name.replace(/^of\s+/i, "").trim();
   }
@@ -249,6 +328,32 @@ function contributionQuantity(
   if (unitKey === "clove") return 1;
   if (unitKey === "bunch") return 1;
   return null;
+}
+
+const VOLUME_MERGE_UNITS = new Set(["cup", "tbsp", "tsp", "pinch"]);
+
+/** 1 pinch ≈ 1/16 tsp for shopping-list math (merges with measured tsp). */
+const TSP_PER_PINCH = 1 / 16;
+
+function isVolumeMergeUnit(unit: string | null): boolean {
+  return unit != null && VOLUME_MERGE_UNITS.has(unit);
+}
+
+/** Convert kitchen volume to cups (US: 1 cup = 16 tbsp = 48 tsp). */
+function quantityToCups(qty: number, unit: string): number {
+  if (unit === "cup") return qty;
+  if (unit === "tbsp") return qty / 16;
+  if (unit === "tsp") return qty / 48;
+  if (unit === "pinch") return (qty * TSP_PER_PINCH) / 48;
+  return qty;
+}
+
+/**
+ * cup / tbsp / tsp lines for the same ingredient merge into one total (in cups).
+ */
+function volumeMergedGroupKey(nameKey: string, unitKey: string | null): string | null {
+  if (!isVolumeMergeUnit(unitKey)) return null;
+  return `${nameKey}|__vol__`;
 }
 
 function canonicalUnitForGrouping(
@@ -378,6 +483,9 @@ export function parseIngredientLine(line: string): ParsedIngredient | null {
   if (/^(dry|wet)\s+ingredients?\s*$/i.test(lower)) {
     return null;
   }
+  if (/^(?:a\s+)?pinch(?:es)?\b/i.test(lower)) {
+    return null;
+  }
 
   // Extract comma-separated comment: \"onion, chopped\" → name \"onion\", comment \"chopped\".
   let comment: string | undefined;
@@ -437,6 +545,9 @@ export function parseIngredientLine(line: string): ParsedIngredient | null {
   if (!nameKey) {
     return null;
   }
+  if (unit === "pinch") {
+    return null;
+  }
 
   return {
     quantity,
@@ -462,24 +573,6 @@ export function parseIngredientsText(text: string): ParsedIngredient[] {
   return result;
 }
 
-function buildNameKey(ing: ParsedIngredient): string {
-  // Normalize the ingredient name for grouping:
-  // - lowercase
-  // - drop parenthetical notes (e.g. "(divided)", "(optional)")
-  // - remove size adjectives like "small/medium/large"
-  // - collapse repeated whitespace
-  let key = ing.name.toLowerCase();
-  key = key.replace(/\([^)]*\)/g, " "); // remove (...) blocks
-  key = key.replace(
-    /\b(extra[-\s]+large|extra large|xl|small|medium|large)\b/g,
-    " "
-  );
-  // Normalize some common synonyms so they group:
-  // sea salt, kosher salt -> salt
-  key = key.replace(/\b(?:sea|kosher)\s+salt\b/g, "salt");
-  return key.trim().replace(/\s+/g, " ");
-}
-
 export function consolidateIngredients(
   sources: { recipeId?: number; title?: string; ingredientsText: string }[]
 ): AggregatedIngredient[] {
@@ -491,18 +584,25 @@ export function consolidateIngredients(
     );
     for (const raw of parsed) {
       const ing = normalizeParsedForConsolidation(raw);
-      const nameKey = canonicalMergeNameKey(buildNameKey(ing));
+      const nameKey = ingredientFingerprint(ing);
       const normalizedDeclaredUnit = normalizeUnit(ing.unit ?? undefined);
       const unitKey = canonicalUnitForGrouping(nameKey, normalizedDeclaredUnit);
-      const groupKey = unitKey ? `${nameKey}|${unitKey}` : nameKey;
-      const contrib = contributionQuantity(ing, nameKey, unitKey);
+      const volKey = volumeMergedGroupKey(nameKey, unitKey);
+      const groupKey = volKey ?? (unitKey ? `${nameKey}|${unitKey}` : nameKey);
+      const contribVol =
+        volKey && ing.quantity != null && unitKey
+          ? quantityToCups(ing.quantity, unitKey)
+          : null;
+      const contrib =
+        contribVol ??
+        contributionQuantity(ing, nameKey, unitKey);
 
       const existing = byKey.get(groupKey);
       if (!existing) {
         byKey.set(groupKey, {
           nameKey,
           displayName: ing.name,
-          unit: unitKey ?? null,
+          unit: volKey ? "cup" : (unitKey ?? null),
           totalQuantity: contrib ?? null,
           lines: [raw.original],
         });
@@ -562,22 +662,147 @@ function gcd(a: number, b: number): number {
   return x || 1;
 }
 
+function formatReducedRational(numerator: number, denominator: number): string {
+  const g = gcd(numerator, denominator);
+  const num = numerator / g;
+  const den = denominator / g;
+  const whole = Math.floor(num / den);
+  const rem = num % den;
+  if (rem === 0) return whole.toString();
+  const frac = `${rem}/${den}`;
+  if (whole === 0) return frac;
+  return `${whole} ${frac}`;
+}
+
+/** Format a cup amount as an exact reduced fraction (up to 1/48 cup precision). */
+function formatCupQuantityFromTsp(tsp: number): string | null {
+  if (!Number.isFinite(tsp) || tsp <= 0) return null;
+  const n = Math.round(tsp);
+  if (Math.abs(tsp - n) > 1e-5) return null;
+  return formatReducedRational(n, 48);
+}
+
+/** Round cup amount to nearest 1/8 cup for readability. */
+function roundCupToEighthString(cups: number): string {
+  const rounded = Math.round(cups * 8) / 8;
+  return formatQuantity(rounded);
+}
+
+const CUP_PLURAL_EPS = 1e-6;
+
+function cupUnitWord(cups: number): "cup" | "cups" {
+  if (!Number.isFinite(cups)) return "cup";
+  if (Math.abs(cups - 1) < CUP_PLURAL_EPS) return "cup";
+  if (cups > 1) return "cups";
+  return "cup";
+}
+
+/** Teaspoon amount as an exact reduced fraction in sixteenths (typical for pinches + 1/4 tsp). */
+function formatTspQuantityExactSixteenths(tsp: number): string | null {
+  if (!Number.isFinite(tsp) || tsp <= 0) return null;
+  const n = Math.round(tsp * 16);
+  if (Math.abs(tsp * 16 - n) > 1e-5) return null;
+  if (n <= 0) return null;
+  return formatReducedRational(n, 16);
+}
+
+/**
+ * Display for totals stored in cups after cup/tbsp/tsp merging.
+ * Prefers exact sixteenth-cup fractions; otherwise whole tablespoons or teaspoons.
+ */
+function formatMixedVolumeFromTsp(tspInt: number): string {
+  let remaining = tspInt;
+  const parts: string[] = [];
+
+  const cupsWhole = Math.floor(remaining / 48);
+  if (cupsWhole > 0) {
+    parts.push(`${formatQuantity(cupsWhole)} ${cupUnitWord(cupsWhole)}`);
+    remaining -= cupsWhole * 48;
+  }
+
+  // Prefer friendly fractional cups before tbsp for awkward amounts.
+  if (remaining >= 24) {
+    parts.push("1/2 cup");
+    remaining -= 24;
+  }
+  while (remaining >= 12) {
+    parts.push("1/4 cup");
+    remaining -= 12;
+  }
+
+  const tbspWhole = Math.floor(remaining / 3);
+  if (tbspWhole > 0) {
+    parts.push(`${formatQuantity(tbspWhole)} tbsp`);
+    remaining -= tbspWhole * 3;
+  }
+  if (remaining > 0) {
+    parts.push(`${formatQuantity(remaining)} tsp`);
+  }
+  return parts.join(" + ");
+}
+
+function formatVolumeTotalForClipboard(cups: number): string {
+  if (!Number.isFinite(cups)) return "";
+  const tspEq = cups * 48;
+  const tspInt = Math.round(tspEq);
+  if (Math.abs(tspEq - tspInt) < 1e-5) {
+    if (tspInt <= 0) return `${formatQuantity(cups)} ${cupUnitWord(cups)}`;
+
+    // Prefer largest readable unit: cups for >= 12 tsp, then tbsp.
+    if (tspInt >= 12) {
+      const exactCupStr = formatCupQuantityFromTsp(tspInt);
+      const reducedDenominator = 48 / gcd(tspInt, 48);
+      if (reducedDenominator > 8) {
+        const mixed = formatMixedVolumeFromTsp(tspInt);
+        if (mixed) return mixed;
+      }
+      const cupStr =
+        reducedDenominator <= 8
+          ? exactCupStr
+          : roundCupToEighthString(tspInt / 48);
+      if (cupStr) {
+        return `${cupStr} ${cupUnitWord(tspInt / 48)}`;
+      }
+    }
+    if (tspInt % 3 === 0) {
+      return `${formatQuantity(tspInt / 3)} tbsp`;
+    }
+  }
+
+  // Keep small/fractional totals readable as tsp (e.g. 5/16 tsp from cinnamon + pinch).
+  const tspStr = formatTspQuantityExactSixteenths(tspEq);
+  if (tspStr) {
+    return `${tspStr} tsp`;
+  }
+
+  return `${formatQuantity(cups)} ${cupUnitWord(cups)}`;
+}
+
 export function formatAggregatedForClipboard(items: AggregatedIngredient[]): string {
   if (!items.length) return "";
   const lines: string[] = [];
   for (const item of items) {
     const parts: string[] = [];
     if (item.totalQuantity != null) {
-      parts.push(formatQuantity(item.totalQuantity));
+      if (item.unit === "cup") {
+        const vol = formatVolumeTotalForClipboard(item.totalQuantity);
+        if (vol) parts.push(vol);
+      } else {
+        parts.push(formatQuantity(item.totalQuantity));
+      }
     }
-    if (item.unit) {
+    if (item.unit && item.unit !== "cup") {
       const u =
-        item.unit === "head" &&
-        item.totalQuantity != null &&
-        item.totalQuantity > 1
-          ? "heads"
+        item.totalQuantity != null && item.totalQuantity > 1
+          ? item.unit === "head"
+            ? "heads"
+            : item.unit === "can"
+              ? "cans"
+              : item.unit
           : item.unit;
       parts.push(u);
+    } else if (!item.totalQuantity && item.unit === "cup") {
+      parts.push("cup");
     }
     parts.push(item.displayName);
     const line = parts.join(" ").trim();

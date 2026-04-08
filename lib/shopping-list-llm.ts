@@ -6,7 +6,8 @@ const SYSTEM_PROMPT =
   "You consolidate a grocery shopping list. Merge rows that refer to the same real-world item; " +
   "add totalQuantity when combining. Keep units (cup, head, clove, bunch, etc.) consistent. " +
   "Output ONLY compact JSON: {\"items\":[{\"nameKey\":\"\",\"displayName\":\"\",\"unit\":null,\"totalQuantity\":null,\"lines\":[]}]}. " +
-  "nameKey: lowercase normalized key. unit: string or null. totalQuantity: a JSON number or null. " +
+  "nameKey: stable id like the rule engine (lowercase letters from ingredient words, sorted, no spaces). " +
+  "unit: string or null. totalQuantity: a JSON number or null. " +
   "lines: string array of contributing original lines (never omit; use merged list). " +
   "Do not invent items. If uncertain, keep separate.";
 
