@@ -8,7 +8,14 @@ type Candidate = {
   bucket: string;
   hint: "in_your_library" | "likely_recipe_page" | "maybe_recipe_page";
   matchedRecipe: { id: number; title: string; sourceUrl: string } | null;
+  /** Second+ WP Recipe Maker card title on the same URL as your source */
+  embeddedCardTitle?: string;
 };
+
+/** Result of merge actions used to show “included” + undo per row. */
+export type LinkedAddonMergeResult =
+  | { ok: true; mergedTitle: string }
+  | { ok: false; error?: string; cancelled?: boolean };
 
 type Props = {
   parentRecipeId?: number;
@@ -21,14 +28,21 @@ type Props = {
   onMergeFromLibrary?: (
     childRecipeId: number,
     mergedTitle: string
-  ) => Promise<void> | void;
+  ) => Promise<LinkedAddonMergeResult> | LinkedAddonMergeResult;
   /** Import a recipe from a URL and append it (works before Save / without a recipe id) */
-  onMergeFromUrl?: (url: string) => Promise<void> | void;
+  onMergeFromUrl?: (
+    url: string
+  ) => Promise<LinkedAddonMergeResult> | LinkedAddonMergeResult;
+  /** Strip the last merged block for this title from ingredients + instructions */
+  onUndoMergedSection?: (mergedTitle: string) => void;
 };
 
 function hintLabel(c: Candidate): string {
   if (c.hint === "in_your_library") {
     return `In your library: “${c.matchedRecipe?.title ?? "recipe"}”`;
+  }
+  if (c.embeddedCardTitle) {
+    return "We can import this block from the same page — it is not the same as only re-importing your main link.";
   }
   if (c.hint === "likely_recipe_page") {
     return "Looks like a recipe page (URL pattern)";
@@ -44,6 +58,7 @@ export function LinkedRecipeHints({
   instructionsText,
   onMergeFromLibrary,
   onMergeFromUrl,
+  onUndoMergedSection,
 }: Props) {
   const [candidates, setCandidates] = useState<Candidate[] | null>(null);
   const [samePageMention, setSamePageMention] = useState(false);
@@ -52,6 +67,10 @@ export function LinkedRecipeHints({
   const [error, setError] = useState<string | null>(null);
   const [mergingId, setMergingId] = useState<number | null>(null);
   const [mergingUrl, setMergingUrl] = useState<string | null>(null);
+  /** Row key (candidate `url`) → merged section title for undo */
+  const [includedRows, setIncludedRows] = useState<
+    Record<string, { mergedTitle: string }>
+  >({});
 
   const scan = useCallback(async () => {
     setLoading(true);
@@ -118,10 +137,11 @@ export function LinkedRecipeHints({
         </button>
       </div>
       <p className="mt-1 text-xs text-[#7f8c8d]">
-        We only look at the <strong>ingredients</strong> list: pasted URLs in
-        that field, plus recipe links inside the ingredient list on the source
-        page (when you have a source URL). Instructions and “related recipe”
-        sections are ignored.
+        We scan pasted URLs in the <strong>ingredients</strong> field, recipe
+        links inside the ingredient list on the source page, and{" "}
+        <strong>extra recipe cards</strong> some blogs embed on the same article
+        (same base URL as your source — we label those by card name, not only by
+        link). Broader “related posts” sections are still ignored.
       </p>
 
       {error && (
@@ -160,9 +180,25 @@ export function LinkedRecipeHints({
       )}
 
       {candidates && candidates.length > 0 && (
-        <ul className="mt-3 space-y-2 text-sm">
+        <>
+          {candidates.some((c) => c.embeddedCardTitle) && (
+            <div className="mt-3 rounded border border-[#e8d4a8] bg-[#fff9ed] px-3 py-2 text-xs text-[#5b3b2a]">
+              <strong className="font-semibold">Same link, more recipes:</strong>{" "}
+              Some posts include several recipe cards on one URL. The names below
+              are separate blocks you can merge — easy to overlook if you only
+              glance at the URL.
+            </div>
+          )}
+          <ul
+            className={`space-y-2 text-sm ${
+              candidates.some((c) => c.embeddedCardTitle) ? "mt-2" : "mt-3"
+            }`}
+          >
           {candidates.map((c) => {
             const mergeUrl = c.matchedRecipe?.sourceUrl ?? c.url;
+            const rowKey = c.url;
+            const included = includedRows[rowKey] != null;
+            const includedTitle = includedRows[rowKey]?.mergedTitle;
             const showLibraryMerge =
               c.hint === "in_your_library" &&
               c.matchedRecipe != null &&
@@ -170,68 +206,147 @@ export function LinkedRecipeHints({
               onMergeFromLibrary != null;
             const showUrlMerge = onMergeFromUrl != null && !showLibraryMerge;
             const urlBusy = mergingUrl === mergeUrl;
+            const cardName = c.embeddedCardTitle;
 
             return (
               <li
                 key={c.url}
-                className="rounded border border-[#e0d4c7] bg-white p-2"
+                className={`rounded border p-2 transition-colors duration-200 ${
+                  included
+                    ? "border-[#c5dcc0] bg-[#f4faf3]"
+                    : "border-[#e0d4c7] bg-white"
+                }`}
               >
-                <p className="text-xs font-medium text-[#5b3b2a]">
-                  {hintLabel(c)}
-                </p>
-                <a
-                  href={c.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-0.5 block truncate text-xs text-[#e67e22] hover:underline"
+                <div
+                  className={`transition-opacity duration-200 ${
+                    included ? "opacity-45" : "opacity-100"
+                  }`}
                 >
-                  {c.url}
-                </a>
-                {showLibraryMerge && (
-                  <button
-                    type="button"
-                    disabled={
-                      mergingId === c.matchedRecipe!.id || mergingUrl != null
-                    }
-                    onClick={async () => {
-                      setMergingId(c.matchedRecipe!.id);
-                      try {
-                        await onMergeFromLibrary!(
-                          c.matchedRecipe!.id,
-                          c.matchedRecipe!.title
-                        );
-                      } finally {
-                        setMergingId(null);
-                      }
-                    }}
-                    className="mt-2 rounded bg-[#e67e22] px-2 py-1 text-xs font-medium text-white hover:bg-[#cf711f] disabled:opacity-60"
+                  {cardName ? (
+                    <div className="mb-1.5">
+                      <p className="text-sm font-semibold leading-snug text-[#5b3b2a]">
+                        {cardName}
+                      </p>
+                      <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#a67c52]">
+                        Same article · extra recipe card
+                      </p>
+                    </div>
+                  ) : null}
+                  <p className="text-xs font-medium text-[#5b3b2a]">
+                    {hintLabel(c)}
+                  </p>
+                  <a
+                    href={c.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-0.5 block truncate text-xs text-[#e67e22] hover:underline"
+                    title={c.url}
                   >
-                    {mergingId === c.matchedRecipe!.id
-                      ? "Merging…"
-                      : "Merge from library"}
-                  </button>
-                )}
-                {showUrlMerge && (
-                  <button
-                    type="button"
-                    disabled={urlBusy || mergingId != null}
-                    onClick={async () => {
-                      setMergingUrl(mergeUrl);
-                      try {
-                        await onMergeFromUrl!(mergeUrl);
-                      } finally {
-                        setMergingUrl(null);
+                    {cardName ? `Technical link (same page): ${c.url}` : c.url}
+                  </a>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {showLibraryMerge && !included && (
+                    <button
+                      type="button"
+                      disabled={
+                        mergingId === c.matchedRecipe!.id || mergingUrl != null
                       }
-                    }}
-                    className="mt-2 rounded bg-[#e67e22] px-2 py-1 text-xs font-medium text-white hover:bg-[#cf711f] disabled:opacity-60"
-                  >
-                    {urlBusy ? "Importing…" : "Merge into this recipe"}
-                  </button>
-                )}
-                {showUrlMerge && (
+                      onClick={async () => {
+                        setMergingId(c.matchedRecipe!.id);
+                        try {
+                          const r = await onMergeFromLibrary!(
+                            c.matchedRecipe!.id,
+                            c.matchedRecipe!.title
+                          );
+                          if (
+                            r &&
+                            typeof r === "object" &&
+                            r.ok &&
+                            onUndoMergedSection
+                          ) {
+                            setIncludedRows((p) => ({
+                              ...p,
+                              [rowKey]: { mergedTitle: r.mergedTitle },
+                            }));
+                          }
+                        } finally {
+                          setMergingId(null);
+                        }
+                      }}
+                      className="rounded bg-[#e67e22] px-2 py-1 text-xs font-medium text-white hover:bg-[#cf711f] disabled:opacity-60"
+                    >
+                      {mergingId === c.matchedRecipe!.id
+                        ? "Merging…"
+                        : "Merge from library"}
+                    </button>
+                  )}
+                  {showUrlMerge && !included && (
+                    <button
+                      type="button"
+                      disabled={urlBusy || mergingId != null}
+                      onClick={async () => {
+                        setMergingUrl(mergeUrl);
+                        try {
+                          const r = await onMergeFromUrl!(mergeUrl);
+                          if (
+                            r &&
+                            typeof r === "object" &&
+                            r.ok &&
+                            onUndoMergedSection
+                          ) {
+                            setIncludedRows((p) => ({
+                              ...p,
+                              [rowKey]: { mergedTitle: r.mergedTitle },
+                            }));
+                          }
+                        } finally {
+                          setMergingUrl(null);
+                        }
+                      }}
+                      className="rounded bg-[#e67e22] px-2 py-1 text-xs font-medium text-white hover:bg-[#cf711f] disabled:opacity-60"
+                    >
+                      {urlBusy
+                        ? "Importing…"
+                        : cardName
+                          ? `Add “${cardName}” to this recipe`
+                          : "Merge into this recipe"}
+                    </button>
+                  )}
+                  {included && includedTitle && onUndoMergedSection && (
+                    <>
+                      <span className="text-xs font-medium text-[#1e8449]">
+                        Included in this draft
+                      </span>
+                      <button
+                        type="button"
+                        className="rounded border border-[#7dcea0] bg-white px-2 py-1 text-xs font-medium text-[#1e8449] hover:bg-[#eafaf1]"
+                        aria-label={`Undo merge of ${includedTitle}`}
+                        onClick={() => {
+                          onUndoMergedSection(includedTitle);
+                          setIncludedRows((p) => {
+                            const n = { ...p };
+                            delete n[rowKey];
+                            return n;
+                          });
+                        }}
+                      >
+                        Undo
+                      </button>
+                    </>
+                  )}
+                </div>
+                {showUrlMerge && !included && (
                   <p className="mt-1 text-xs text-[#7f8c8d]">
-                    Fetches that page and appends its ingredients and
-                    instructions below yours. Save when you’re done.
+                    {cardName
+                      ? "Pulls that card’s ingredients and instructions from the page and appends them below yours. Save when you’re done."
+                      : "Fetches that page and appends its ingredients and instructions below yours. Save when you’re done."}
+                  </p>
+                )}
+                {included && (showUrlMerge || showLibraryMerge) && (
+                  <p className="mt-1 text-xs text-[#7f8c8d]">
+                    Undo removes that add-on from the ingredients and instructions
+                    fields (nothing is saved until you click Save).
                   </p>
                 )}
                 {c.hint === "in_your_library" &&
@@ -250,7 +365,8 @@ export function LinkedRecipeHints({
               </li>
             );
           })}
-        </ul>
+          </ul>
+        </>
       )}
 
       {candidates && candidates.length > 0 && ignoredCount > 0 && (

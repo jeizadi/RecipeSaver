@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromRequest } from "@/lib/auth";
 import {
   collectUrlsFromIngredientsText,
+  extractSamePageWprmRecipeSiblings,
   extractSameSiteRecipeLinksFromIngredientSectionsHtml,
   normalizeUrlForMatch,
   scoreUrlAsRecipePage,
@@ -18,6 +19,12 @@ type Candidate = {
     | "in_your_library"
     | "likely_recipe_page"
     | "maybe_recipe_page";
+  /**
+   * When this URL is a second (or later) WP Recipe Maker card on the same article
+   * as `sourceUrl`, the card’s heading — show prominently so it’s not confused with
+   * the main link you pasted.
+   */
+  embeddedCardTitle?: string;
 };
 
 function pickBestSourceUrlMatch(
@@ -97,6 +104,8 @@ export async function POST(request: NextRequest) {
     typeof body.sourceUrl === "string" ? body.sourceUrl.trim() : "";
   let pageOrigin: string | undefined;
   let htmlUrls: string[] = [];
+  /** WPRM sibling URLs → card title from the fetched page */
+  const wprmCardTitleByUrl = new Map<string, string>();
   let sourcePageFetched = false;
 
   if (sourceUrlStr.startsWith("http://") || sourceUrlStr.startsWith("https://")) {
@@ -116,10 +125,24 @@ export async function POST(request: NextRequest) {
       });
       if (res.ok) {
         const html = await res.text();
-        htmlUrls = extractSameSiteRecipeLinksFromIngredientSectionsHtml(
+        const fromIngredients =
+          extractSameSiteRecipeLinksFromIngredientSectionsHtml(
+            html,
+            sourceUrlStr
+          );
+        const fromWprmSiblings = extractSamePageWprmRecipeSiblings(
           html,
           sourceUrlStr
         );
+        for (const s of fromWprmSiblings) {
+          wprmCardTitleByUrl.set(s.url, s.title);
+        }
+        htmlUrls = [
+          ...new Set([
+            ...fromIngredients,
+            ...fromWprmSiblings.map((s) => s.url),
+          ]),
+        ];
         sourcePageFetched = true;
       }
     } catch {
@@ -147,6 +170,7 @@ export async function POST(request: NextRequest) {
   for (const url of urls) {
     const scored = scoreUrlAsRecipePage(url, scoreCtx);
     const matched = pickBestSourceUrlMatch(url, allRecipes);
+    const embeddedCardTitle = wprmCardTitleByUrl.get(url);
 
     if (matched) {
       suggested.push({
@@ -159,6 +183,7 @@ export async function POST(request: NextRequest) {
           sourceUrl: matched.sourceUrl,
         },
         hint: "in_your_library",
+        ...(embeddedCardTitle != null ? { embeddedCardTitle } : {}),
       });
       continue;
     }
@@ -175,6 +200,7 @@ export async function POST(request: NextRequest) {
         bucket: scored.bucket,
         matchedRecipe: null,
         hint: "likely_recipe_page",
+        ...(embeddedCardTitle != null ? { embeddedCardTitle } : {}),
       });
       continue;
     }
@@ -187,6 +213,7 @@ export async function POST(request: NextRequest) {
         bucket: scored.bucket,
         matchedRecipe: null,
         hint: "maybe_recipe_page",
+        ...(embeddedCardTitle != null ? { embeddedCardTitle } : {}),
       });
     } else if (ignoredUrls.length < 12) {
       ignoredUrls.push(url);

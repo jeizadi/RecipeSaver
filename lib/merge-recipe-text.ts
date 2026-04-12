@@ -35,3 +35,59 @@ export function appendMergedRecipeBlocks(
     ),
   };
 }
+
+function nextMergeBlockStart(text: string, fromIndex: number): number {
+  const marker = "\n\n--- ";
+  let i = text.indexOf(marker, fromIndex);
+  while (i !== -1) {
+    const close = text.indexOf(" (merged) ---\n", i + marker.length);
+    if (close !== -1) return i;
+    i = text.indexOf(marker, i + 1);
+  }
+  return -1;
+}
+
+/**
+ * Removes the **last** appended merge block for `childTitle` (same heading as
+ * {@link appendMergedRecipeBlocks}). If the same title was merged twice, call
+ * twice to remove both.
+ */
+export function removeLastMergedRecipeSection(
+  text: string,
+  childTitle: string
+): string {
+  const mid = `\n\n--- ${childTitle} (merged) ---\n`;
+  let blockStart = text.lastIndexOf(mid);
+  let afterHeader: number;
+  if (blockStart !== -1) {
+    afterHeader = blockStart + mid.length;
+  } else {
+    const start = `--- ${childTitle} (merged) ---\n`;
+    if (text.startsWith(start)) {
+      blockStart = 0;
+      afterHeader = start.length;
+    } else if (text === `--- ${childTitle} (merged) ---`) {
+      return "";
+    } else {
+      return text;
+    }
+  }
+
+  const nextHdr = nextMergeBlockStart(text, afterHeader);
+  const blockEnd = nextHdr === -1 ? text.length : nextHdr;
+
+  return (text.slice(0, blockStart) + text.slice(blockEnd))
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/^\n+/, "");
+}
+
+export function removeLastMergedRecipeBlocks(
+  ingredientsText: string,
+  instructionsText: string,
+  childTitle: string
+): { ingredientsText: string; instructionsText: string } {
+  return {
+    ingredientsText: removeLastMergedRecipeSection(ingredientsText, childTitle),
+    instructionsText: removeLastMergedRecipeSection(instructionsText, childTitle),
+  };
+}

@@ -3,7 +3,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { LinkedRecipeHints } from "./linked-recipe-hints";
+import { removeLastMergedRecipeBlocks } from "@/lib/merge-recipe-text";
+import {
+  LinkedRecipeHints,
+  type LinkedAddonMergeResult,
+} from "./linked-recipe-hints";
 import { MergeRecipePanel } from "./merge-recipe-panel";
 
 const CATEGORIES = [
@@ -120,11 +124,13 @@ export function RecipeForm({
     }
   }
 
-  async function handleMergeLinkedFromUrl(url: string) {
+  async function handleMergeLinkedFromUrl(
+    url: string
+  ): Promise<LinkedAddonMergeResult> {
     const ok = window.confirm(
       "Import this recipe from the link and append it below your current ingredients and instructions?\n\nNothing is saved until you click Save."
     );
-    if (!ok) return;
+    if (!ok) return { ok: false, cancelled: true };
     const res = await fetch("/api/recipes/merge-from-url", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -142,16 +148,32 @@ export function RecipeForm({
     if (!data.ok) {
       setStatus(data.error ?? "Merge failed.");
       setStatusError(true);
-      return;
+      return { ok: false, error: data.error };
     }
+    const mergedTitle = (data.mergedTitle as string) ?? "recipe";
     setForm((prev) => ({
       ...prev,
       ingredientsText: data.ingredientsText ?? prev.ingredientsText,
       instructionsText: data.instructionsText ?? prev.instructionsText,
     }));
     setStatus(
-      `Merged “${data.mergedTitle ?? "recipe"}” into this recipe. Review and click Save.`
+      `Merged “${mergedTitle}” into this recipe. Review and click Save.`
     );
+    setStatusError(false);
+    return { ok: true, mergedTitle };
+  }
+
+  function handleUndoMergedSection(mergedTitle: string) {
+    setForm((prev) => {
+      const { ingredientsText, instructionsText } =
+        removeLastMergedRecipeBlocks(
+          prev.ingredientsText,
+          prev.instructionsText,
+          mergedTitle
+        );
+      return { ...prev, ingredientsText, instructionsText };
+    });
+    setStatus("Removed merged add-on from this draft.");
     setStatusError(false);
   }
 
@@ -236,14 +258,18 @@ export function RecipeForm({
         autoScanNonce={linkHintsScanNonce}
         ingredientsText={form.ingredientsText}
         instructionsText={form.instructionsText}
+        onUndoMergedSection={handleUndoMergedSection}
         onMergeFromLibrary={
           recipeId != null
-            ? async (childRecipeId, mergedTitle) => {
+            ? async (
+                childRecipeId,
+                mergedTitle
+              ): Promise<LinkedAddonMergeResult> => {
                 const ok = window.confirm(
                   `Merge “${mergedTitle}” from your library into this recipe?\n\n` +
                     "Its ingredients and instructions will be appended with a heading. Nothing is saved until you click Save."
                 );
-                if (!ok) return;
+                if (!ok) return { ok: false, cancelled: true };
                 const res = await fetch(`/api/recipes/${recipeId}/merge`, {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
@@ -257,8 +283,9 @@ export function RecipeForm({
                 if (!data.ok) {
                   setStatus(data.error ?? "Merge failed.");
                   setStatusError(true);
-                  return;
+                  return { ok: false, error: data.error };
                 }
+                const title = (data.mergedTitle as string) ?? mergedTitle;
                 setForm((prev) => ({
                   ...prev,
                   ingredientsText: data.ingredientsText ?? prev.ingredientsText,
@@ -266,9 +293,10 @@ export function RecipeForm({
                     data.instructionsText ?? prev.instructionsText,
                 }));
                 setStatus(
-                  `Merged “${mergedTitle}” into this recipe. Review and click Save to store it.`
+                  `Merged “${title}” into this recipe. Review and click Save to store it.`
                 );
                 setStatusError(false);
+                return { ok: true, mergedTitle: title };
               }
             : undefined
         }

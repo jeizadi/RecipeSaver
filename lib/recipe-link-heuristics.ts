@@ -92,10 +92,16 @@ export function extractUrlsFromText(text: string): string[] {
 
 export function normalizeUrlForMatch(url: string): string {
   try {
+    const orig = new URL(url);
+    const frag = orig.hash;
     const u = new URL(url);
     u.hash = "";
     u.search = "";
-    return u.toString().replace(/\/$/, "");
+    const base = u.toString().replace(/\/+$/, "");
+    if (/^#wprm-recipe-container-\d+$/i.test(frag)) {
+      return `${base}${frag}`;
+    }
+    return base;
   } catch {
     return url.trim();
   }
@@ -189,6 +195,16 @@ export function scoreUrlAsRecipePage(
     } catch {
       // ignore
     }
+  }
+
+  try {
+    const h = new URL(url).hash;
+    if (/^#wprm-recipe-container-\d+$/i.test(h)) {
+      score += 5;
+      reasons.push("WP Recipe Maker card anchor on same page");
+    }
+  } catch {
+    // ignore
   }
 
   // Longish path on a blog often = article/recipe (weak signal)
@@ -306,4 +322,59 @@ export function extractSameSiteRecipeLinksFromIngredientSectionsHtml(
   });
 
   return [...out].slice(0, 48);
+}
+
+export type SamePageWprmSibling = {
+  url: string;
+  /** `.wprm-recipe-name` inside the card, for UI (not a separate page URL). */
+  title: string;
+};
+
+/**
+ * Some blogs embed multiple WP Recipe Maker cards on one post (e.g. main + sauces).
+ * Those are not separate URLs in the ingredient list, so cross-page link extraction
+ * misses them. Return `#wprm-recipe-container-{id}` URLs for every card except the
+ * first in document order (treated as the primary post recipe), with card titles.
+ */
+export function extractSamePageWprmRecipeSiblings(
+  html: string,
+  pageUrl: string
+): SamePageWprmSibling[] {
+  let baseUrl: URL;
+  try {
+    baseUrl = new URL(pageUrl);
+  } catch {
+    return [];
+  }
+  baseUrl.hash = "";
+  baseUrl.search = "";
+  const base = baseUrl.toString().replace(/\/+$/, "");
+
+  const $ = cheerio.load(html);
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  $(".wprm-recipe-container[id]").each((_, el) => {
+    const id = ($(el).attr("id") ?? "").trim();
+    if (!/^wprm-recipe-container-\d+$/i.test(id)) return;
+    const key = id.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    ids.push(id);
+  });
+
+  if (ids.length <= 1) return [];
+
+  const out: SamePageWprmSibling[] = [];
+  for (let i = 1; i < ids.length; i++) {
+    const id = ids[i];
+    if (!id) continue;
+    const $card = $(`#${id}`);
+    const rawTitle = $card.find(".wprm-recipe-name").first().text();
+    const title = rawTitle.replace(/\s+/g, " ").trim();
+    out.push({
+      url: `${base}#${id}`,
+      title: title || "Additional recipe on this page",
+    });
+  }
+  return out.slice(0, 24);
 }

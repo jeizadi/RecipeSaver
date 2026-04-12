@@ -371,6 +371,97 @@ function emptyRecipe(): ImportedRecipe {
   };
 }
 
+const WPRM_CONTAINER_HASH_RE = /^#wprm-recipe-container-(\d+)$/i;
+
+function wprmContainerIdFromRecipeUrl(url: string): string | null {
+  try {
+    const m = new URL(url).hash.match(WPRM_CONTAINER_HASH_RE);
+    return m ? `wprm-recipe-container-${m[1]}` : null;
+  } catch {
+    return null;
+  }
+}
+
+/** One WP Recipe Maker card (used when the URL hash targets a specific container). */
+function parseFromWprmRecipeContainer(
+  html: string,
+  containerId: string
+): ImportedRecipe | null {
+  const $ = cheerio.load(html);
+  const id = containerId.replace(/^#/, "");
+  if (!/^wprm-recipe-container-\d+$/i.test(id)) return null;
+  const $root = $(`#${id}`);
+  if (!$root.length) return null;
+
+  const imported = emptyRecipe();
+  const title = normalizeText($root.find(".wprm-recipe-name").first().text());
+  if (title) imported.title = title;
+
+  const ingLines: string[] = [];
+  $root.find("li.wprm-recipe-ingredient").each((_, li) => {
+    const $li = $(li);
+    const clone = $li.clone();
+    clone.find(".wprm-checkbox-container").remove();
+    const t = normalizeText(clone.text());
+    if (t) ingLines.push(t.replace(/\s+/g, " ").trim());
+  });
+  imported.ingredientsText = ingLines.join("\n");
+
+  const steps: string[] = [];
+  $root.find("li.wprm-recipe-instruction").each((_, li) => {
+    const t = normalizeText(
+      $(li).find(".wprm-recipe-instruction-text").first().text()
+    );
+    if (t) steps.push(t.replace(/\s+/g, " ").trim());
+  });
+  imported.instructionsText = steps.join("\n");
+
+  const servings = normalizeText(
+    $root.find(".wprm-recipe-servings").first().text()
+  );
+  if (servings) imported.servings = servings;
+
+  const prepTxt = $root
+    .find(".wprm-recipe-prep_time-minutes")
+    .first()
+    .text()
+    .trim();
+  const prep = parseInt(prepTxt, 10);
+  if (Number.isFinite(prep) && prep > 0) imported.prepTimeMinutes = prep;
+
+  const totalTxt = $root
+    .find(".wprm-recipe-total_time-minutes")
+    .first()
+    .text()
+    .trim();
+  const tot = parseInt(totalTxt, 10);
+  if (Number.isFinite(tot) && tot > 0) imported.totalTimeMinutes = tot;
+
+  imported.author =
+    normalizeText($root.find(".wprm-recipe-author").first().text()) ?? "";
+
+  const img =
+    $root.find(".wprm-recipe-image img").first().attr("data-lazy-src") ||
+    $root.find(".wprm-recipe-image img").first().attr("src") ||
+    "";
+  const imgNorm = normalizeText(img) ?? "";
+  imported.imageUrl = imgNorm.startsWith("data:") ? "" : imgNorm;
+
+  imported.category =
+    inferCategory(imported.title) ??
+    inferCategory(imported.ingredientsText) ??
+    "";
+
+  if (
+    !imported.title &&
+    !imported.ingredientsText.trim() &&
+    !imported.instructionsText.trim()
+  ) {
+    return null;
+  }
+  return imported;
+}
+
 function parseFromJsonLd(html: string): ImportedRecipe | null {
   const $ = cheerio.load(html);
   const scripts = $('script[type="application/ld+json"]');
@@ -452,6 +543,8 @@ export class RecipeImportError extends Error {
 }
 
 export async function importRecipeFromUrl(url: string): Promise<ImportedRecipe> {
+  const wprmContainerId = wprmContainerIdFromRecipeUrl(url);
+
   const res = await fetch(url, {
     headers: {
       "User-Agent": "RecipeboxImporter/1.0 (+https; personal use)",
@@ -461,6 +554,19 @@ export async function importRecipeFromUrl(url: string): Promise<ImportedRecipe> 
   });
   if (!res.ok) throw new RecipeImportError(`Failed to fetch: ${res.status}`);
   const html = await res.text();
+
+  if (wprmContainerId) {
+    const scoped = parseFromWprmRecipeContainer(html, wprmContainerId);
+    if (
+      scoped &&
+      (scoped.ingredientsText.trim() || scoped.instructionsText.trim())
+    ) {
+      return scoped;
+    }
+    throw new RecipeImportError(
+      "Could not read that embedded recipe card from the page."
+    );
+  }
 
   let recipe = parseFromJsonLd(html);
   const hostname = new URL(url).hostname.toLowerCase();
