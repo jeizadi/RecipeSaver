@@ -37,6 +37,9 @@ export async function getOrCreateProfile(profileName = "default", userId?: numbe
     favoriteIngredients: parseCsv(row.favoriteIngredients),
     dislikedIngredients: parseCsv(row.dislikedIngredients),
     explorationRatio: Math.min(1, Math.max(0, row.explorationRatio)),
+    weeklyBudgetCents: row.weeklyBudgetCents,
+    budgetToleranceRatio: Math.min(1, Math.max(0.01, row.budgetToleranceRatio)),
+    trustedSourceRatio: Math.min(1, Math.max(0, row.trustedSourceRatio)),
   };
 }
 
@@ -70,6 +73,10 @@ export async function updateProfile(profileName: string, patch: Partial<ParsedPr
       favoriteIngredients: csv(patch.favoriteIngredients, existing.favoriteIngredients),
       dislikedIngredients: csv(patch.dislikedIngredients, existing.dislikedIngredients),
       explorationRatio: patch.explorationRatio ?? existing.explorationRatio,
+      weeklyBudgetCents: patch.weeklyBudgetCents ?? existing.weeklyBudgetCents,
+      budgetToleranceRatio:
+        patch.budgetToleranceRatio ?? existing.budgetToleranceRatio,
+      trustedSourceRatio: patch.trustedSourceRatio ?? existing.trustedSourceRatio,
     },
   });
 }
@@ -95,6 +102,8 @@ export async function getFeedbackStats(userId?: number): Promise<FeedbackStats> 
   const byRecipeId: Record<number, number> = {};
   const byDomain: Record<string, number> = {};
   const ingredientAffinity: Record<string, number> = {};
+  const recipeRatings: Record<number, number> = {};
+  const cookedCounts: Record<number, number> = {};
 
   for (const row of rows) {
     const w = signalWeight(row.signal, row.rating);
@@ -102,6 +111,12 @@ export async function getFeedbackStats(userId?: number): Promise<FeedbackStats> 
 
     if (row.recipeId != null) {
       byRecipeId[row.recipeId] = (byRecipeId[row.recipeId] ?? 0) + w;
+      if (row.signal === "cooked") {
+        cookedCounts[row.recipeId] = (cookedCounts[row.recipeId] ?? 0) + 1;
+      }
+      if (row.signal === "rate" && row.rating != null) {
+        recipeRatings[row.recipeId] = (recipeRatings[row.recipeId] ?? 0) + row.rating;
+      }
     }
     const domain =
       row.sourceDomain ||
@@ -122,6 +137,8 @@ export async function getFeedbackStats(userId?: number): Promise<FeedbackStats> 
         tags: row.recipe.tags,
         createdAt: row.recipe.createdAt,
         isWebCandidate: false,
+        estimatedCostCents: null,
+        costConfidence: 0,
       });
       for (const k of features.ingredientKeys) {
         ingredientAffinity[k] = (ingredientAffinity[k] ?? 0) + w * 0.35;
@@ -129,5 +146,5 @@ export async function getFeedbackStats(userId?: number): Promise<FeedbackStats> 
     }
   }
 
-  return { byRecipeId, byDomain, ingredientAffinity };
+  return { byRecipeId, byDomain, ingredientAffinity, recipeRatings, cookedCounts };
 }

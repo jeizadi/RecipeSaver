@@ -13,14 +13,40 @@ type Suggestion = {
   tags: string;
   score: number;
   reasons: string[];
+  lane: "repeat_favorite" | "trusted_similar" | "explore";
+  budgetImpact: {
+    estimatedCostCents: number;
+    confidence: number;
+    fitScore: number;
+  };
+  components: {
+    budget: number;
+    similarity: number;
+    repeat: number;
+    fatigue: number;
+    [key: string]: number;
+  };
+};
+
+type Diagnostics = {
+  topIngredients: Array<{ name: string; score: number }>;
+  topDomains: Array<{ domain: string; score: number }>;
+  mostCookedRecipeIds: number[];
 };
 
 export function SuggestionsPanel() {
   const [includeWebCandidates, setIncludeWebCandidates] = useState(true);
+  const [llmEnabled, setLlmEnabled] = useState(false);
+  const [embeddingEnabled, setEmbeddingEnabled] = useState(false);
   const [limit, setLimit] = useState(12);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
+  const [totals, setTotals] = useState<{
+    estimatedWeeklyCostCents?: number;
+    budgetTargetCents?: number | null;
+  } | null>(null);
 
   async function generate() {
     setLoading(true);
@@ -28,7 +54,12 @@ export function SuggestionsPanel() {
     const res = await fetch("/api/suggestions/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ includeWebCandidates, limit }),
+      body: JSON.stringify({
+        includeWebCandidates,
+        limit,
+        llmEnabled,
+        embeddingEnabled,
+      }),
     });
     const data = await res.json().catch(() => ({}));
     setLoading(false);
@@ -38,7 +69,24 @@ export function SuggestionsPanel() {
       return;
     }
     setSuggestions(data.suggestions ?? []);
+    setDiagnostics(data.diagnostics ?? null);
+    setTotals(data.totals ?? null);
     setStatus(`Generated ${data.suggestions?.length ?? 0} suggestions.`);
+  }
+
+  async function refreshDiagnostics() {
+    const res = await fetch("/api/suggestions/diagnostics");
+    const data = await res.json().catch(() => ({}));
+    if (data.ok) {
+      setDiagnostics({
+        topIngredients: data.diagnostics?.topIngredients ?? [],
+        topDomains: data.diagnostics?.topDomains ?? [],
+        mostCookedRecipeIds:
+          (data.diagnostics?.mostCookedRecipeIds ?? []).map((x: { recipeId: number }) =>
+            Number(x.recipeId)
+          ) ?? [],
+      });
+    }
   }
 
   async function feedback(
@@ -79,6 +127,22 @@ export function SuggestionsPanel() {
           />
           Include open-web candidates
         </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={embeddingEnabled}
+            onChange={(e) => setEmbeddingEnabled(e.target.checked)}
+          />
+          Use embedding provider (feature-flag)
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={llmEnabled}
+            onChange={(e) => setLlmEnabled(e.target.checked)}
+          />
+          Use LLM rerank/explanations (feature-flag)
+        </label>
         <button
           type="button"
           onClick={generate}
@@ -87,13 +151,51 @@ export function SuggestionsPanel() {
         >
           {loading ? "Generating..." : "Generate suggestions"}
         </button>
+        <button
+          type="button"
+          onClick={refreshDiagnostics}
+          className="rounded border border-[#d2c2af] bg-white px-3 py-2 text-sm hover:bg-[#f6efe9]"
+        >
+          Refresh taste diagnostics
+        </button>
       </div>
       {status && <p className="text-sm text-[#7f8c8d]">{status}</p>}
+      {totals && (
+        <p className="text-xs text-[#5b3b2a]">
+          Weekly suggestion cost estimate: $
+          {((totals.estimatedWeeklyCostCents ?? 0) / 100).toFixed(2)}
+          {totals.budgetTargetCents
+            ? ` (target: $${(totals.budgetTargetCents / 100).toFixed(2)})`
+            : ""}
+        </p>
+      )}
+      {diagnostics && (
+        <div className="rounded border border-[#e0d4c7] bg-[#fffdf8] p-3 text-xs">
+          <p className="font-medium text-[#5b3b2a]">Taste diagnostics</p>
+          <p className="mt-1 text-[#7f8c8d]">
+            Top ingredients:{" "}
+            {diagnostics.topIngredients.slice(0, 6).map((x) => x.name).join(", ") || "—"}
+          </p>
+          <p className="mt-1 text-[#7f8c8d]">
+            Top domains:{" "}
+            {diagnostics.topDomains.slice(0, 5).map((x) => x.domain).join(", ") || "—"}
+          </p>
+        </div>
+      )}
       <ul className="space-y-2">
         {suggestions.map((s) => (
           <li key={`${s.rank}-${s.title}-${s.sourceUrl ?? ""}`} className="rounded border border-[#e0d4c7] bg-[#fffdf8] p-3">
             <p className="font-medium">#{s.rank} {s.title}</p>
             <p className="text-xs text-[#7f8c8d]">{s.sourceDomain || "unknown source"} · score {s.score.toFixed(2)}</p>
+            <div className="mt-1 flex flex-wrap gap-1 text-[11px]">
+              <span className="rounded bg-[#fdebd0] px-1.5 py-0.5">{s.lane.replace("_", " ")}</span>
+              <span className="rounded bg-[#eafaf1] px-1.5 py-0.5">
+                fits budget {s.budgetImpact.fitScore.toFixed(2)}
+              </span>
+              <span className="rounded bg-[#ebf5fb] px-1.5 py-0.5">
+                similar {s.components.similarity.toFixed(2)}
+              </span>
+            </div>
             <p className="mt-1 text-xs text-[#5b3b2a]">{s.reasons.join(" · ")}</p>
             <div className="mt-2 flex flex-wrap gap-2 text-xs">
               {s.recipeId ? <a href={`/recipes/${s.recipeId}`} className="underline">Open recipe</a> : null}

@@ -18,6 +18,9 @@ const profileBase: ParsedProfile = {
   favoriteIngredients: [],
   dislikedIngredients: [],
   explorationRatio: 0.35,
+  weeklyBudgetCents: 8000,
+  budgetToleranceRatio: 0.15,
+  trustedSourceRatio: 0.65,
 };
 
 function candidate(overrides: Partial<CandidateRecipe> = {}): CandidateRecipe {
@@ -32,6 +35,8 @@ function candidate(overrides: Partial<CandidateRecipe> = {}): CandidateRecipe {
     tags: "healthy",
     createdAt: new Date("2025-01-01"),
     isWebCandidate: false,
+    estimatedCostCents: 950,
+    costConfidence: 0.4,
     ...overrides,
   };
 }
@@ -57,17 +62,35 @@ describe("hard dietary filters", () => {
 describe("scoreCandidate", () => {
   it("boosts preferred domain and favorite ingredients", () => {
     const scored = scoreCandidate(
-      candidate({
-        sourceDomain: "fav.com",
-        ingredientsText: "1 cup chickpeas\n1 cup spinach",
-      }),
+      {
+        candidate: candidate({
+          sourceDomain: "fav.com",
+          ingredientsText: "1 cup chickpeas\n1 cup spinach",
+        }),
+        lane: "trusted_similar",
+        similarityScore: 0.4,
+        seedRecipeId: null,
+      },
       {
         ...profileBase,
         preferredDomains: ["fav.com"],
         favoriteIngredients: ["chickpeas"],
       },
-      { byRecipeId: {}, byDomain: {}, ingredientAffinity: {} },
-      new Date("2025-01-02")
+      {
+        byRecipeId: {},
+        byDomain: {},
+        ingredientAffinity: {},
+        recipeRatings: {},
+        cookedCounts: {},
+      },
+      {
+        recipeFrequency: {},
+        domainAffinity: {},
+        ingredientAffinity: {},
+        recentCookedRecipeIds: [],
+      },
+      new Date("2025-01-02"),
+      12
     );
     expect(scored.score).toBeGreaterThan(0);
     expect(scored.reasons.length).toBeGreaterThan(0);
@@ -86,6 +109,7 @@ describe("diversifySuggestions", () => {
       }),
       score: 100 - n,
       reasons: ["test"],
+      lane: "explore",
       components: {
         ingredient: 0,
         domain: 0,
@@ -93,6 +117,15 @@ describe("diversifySuggestions", () => {
         feedback: 0,
         novelty: 0,
         exploration: 0,
+        budget: 0,
+        similarity: 0,
+        repeat: 0,
+        fatigue: 0,
+      },
+      budgetImpact: {
+        estimatedCostCents: 1000,
+        confidence: 0.5,
+        fitScore: 0,
       },
     }));
     const out = diversifySuggestions(ranked, 6);

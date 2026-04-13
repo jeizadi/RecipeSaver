@@ -63,6 +63,9 @@ model UserProfile {
   favoriteIngredients  String    @default("")
   dislikedIngredients  String    @default("")
   explorationRatio     Float     @default(0.35)
+  weeklyBudgetCents    Int?      @map("weekly_budget_cents")
+  budgetToleranceRatio Float     @default(0.15) @map("budget_tolerance_ratio")
+  trustedSourceRatio   Float     @default(0.65) @map("trusted_source_ratio")
   createdAt            DateTime  @default(now()) @map("created_at")
   updatedAt            DateTime  @updatedAt @map("updated_at")
   runs                 SuggestionRun[]
@@ -83,6 +86,8 @@ model AppUser {
   recipes       Recipe[]
   profile       UserProfile?
   weeklyMeals   WeeklyMealPlan[]
+  behavior      UserBehaviorAggregate?
+  preferenceVector UserPreferenceVector?
 
   @@map("app_users")
 }
@@ -134,9 +139,12 @@ model RecipeFeature {
   protein               Int?
   carbs                 Int?
   fat                   Int?
+  estimatedCostCents    Int?     @map("estimated_cost_cents")
+  costConfidence        Float    @default(0) @map("cost_confidence")
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")
   recipe                Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  vectorSnapshot        RecipeVectorSnapshot?
 
   @@index([sourceDomain])
   @@map("recipe_features")
@@ -180,11 +188,63 @@ model SuggestionItem {
   sourceDomain  String        @default("") @map("source_domain")
   title         String
   score         Float         @default(0)
+  lane          SuggestionLane @default(explore)
+  budgetFitScore Float        @default(0) @map("budget_fit_score")
+  similarityScore Float       @default(0) @map("similarity_score")
+  explainJson   String        @default("") @map("explain_json")
   reasonJson    String        @default("") @map("reason_json")
 
   @@index([runId, score])
   @@index([recipeId])
   @@map("suggestion_items")
+}
+
+enum SuggestionLane {
+  repeat_favorite
+  trusted_similar
+  explore
+}
+
+model UserBehaviorAggregate {
+  id                    Int      @id @default(autoincrement())
+  userId                Int      @unique @map("user_id")
+  user                  AppUser  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipeFrequencyJson   String   @default("") @map("recipe_frequency_json")
+  domainAffinityJson    String   @default("") @map("domain_affinity_json")
+  ingredientAffinityJson String  @default("") @map("ingredient_affinity_json")
+  recentCookedRecipeIds String   @default("") @map("recent_cooked_recipe_ids")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  @@map("user_behavior_aggregates")
+}
+
+model UserPreferenceVector {
+  id             Int      @id @default(autoincrement())
+  userId         Int      @unique @map("user_id")
+  user           AppUser  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vectorVersion  Int      @default(1) @map("vector_version")
+  localVectorJson String  @default("") @map("local_vector_json")
+  embeddingModel String   @default("") @map("embedding_model")
+  embeddingVector String  @default("") @map("embedding_vector")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("user_preference_vectors")
+}
+
+model RecipeVectorSnapshot {
+  id             Int      @id @default(autoincrement())
+  recipeFeatureId Int     @unique @map("recipe_feature_id")
+  recipeFeature  RecipeFeature @relation(fields: [recipeFeatureId], references: [id], onDelete: Cascade)
+  vectorVersion  Int      @default(1) @map("vector_version")
+  localVectorJson String  @default("") @map("local_vector_json")
+  embeddingModel String   @default("") @map("embedding_model")
+  embeddingVector String  @default("") @map("embedding_vector")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("recipe_vector_snapshots")
 }
 
 model WebRecipeCandidate {

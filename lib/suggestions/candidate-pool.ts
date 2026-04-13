@@ -7,6 +7,14 @@ export async function getCandidatePool(includeWebCandidates: boolean, userId?: n
     where: userId != null ? { userId } : undefined,
     orderBy: { createdAt: "desc" },
     take: 300,
+    include: {
+      feature: {
+        select: {
+          estimatedCostCents: true,
+          costConfidence: true,
+        },
+      },
+    },
   });
 
   const local: CandidateRecipe[] = recipes.map((r) => ({
@@ -20,6 +28,8 @@ export async function getCandidatePool(includeWebCandidates: boolean, userId?: n
     tags: r.tags,
     createdAt: r.createdAt,
     isWebCandidate: false,
+    estimatedCostCents: r.feature?.estimatedCostCents ?? null,
+    costConfidence: r.feature?.costConfidence ?? 0,
   }));
 
   if (!includeWebCandidates) {
@@ -55,6 +65,8 @@ export async function getCandidatePool(includeWebCandidates: boolean, userId?: n
       tags: w.tags,
       createdAt: w.createdAt,
       isWebCandidate: true,
+      estimatedCostCents: null,
+      costConfidence: 0,
     });
   }
 

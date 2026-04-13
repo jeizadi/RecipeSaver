@@ -55,6 +55,18 @@ export async function POST(request: NextRequest) {
         typeof body.explorationRatio === "number"
           ? Math.min(1, Math.max(0, body.explorationRatio))
           : undefined,
+      weeklyBudgetCents:
+        typeof body.weeklyBudgetCents === "number" && Number.isFinite(body.weeklyBudgetCents)
+          ? Math.max(0, Math.round(body.weeklyBudgetCents))
+          : undefined,
+      budgetToleranceRatio:
+        typeof body.budgetToleranceRatio === "number"
+          ? Math.min(0.9, Math.max(0.01, body.budgetToleranceRatio))
+          : undefined,
+      trustedSourceRatio:
+        typeof body.trustedSourceRatio === "number"
+          ? Math.min(1, Math.max(0, body.trustedSourceRatio))
+          : undefined,
     }, user.id);
 
     const profile = await getOrCreateProfile(profileName, user.id);

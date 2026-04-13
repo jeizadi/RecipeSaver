@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateSuggestions } from "@/lib/suggestions";
 import { getCurrentUserFromRequest } from "@/lib/auth";
+import { Prisma } from "@prisma/client";
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,10 +20,25 @@ export async function POST(request: NextRequest) {
           : 12,
       includeWebCandidates: Boolean(body.includeWebCandidates),
       strictFitness: Boolean(body.strictFitness),
+      embeddingEnabled: Boolean(body.embeddingEnabled),
+      llmEnabled: Boolean(body.llmEnabled),
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (e) {
     console.error("suggestions/generate error", e);
+    if (
+      e instanceof Prisma.PrismaClientKnownRequestError &&
+      (e.code === "P2021" || e.code === "P2022")
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Suggestions tables are out of date. Run `npx prisma migrate dev` (or deploy migrations) and try again.",
+        },
+        { status: 500 }
+      );
+    }
     return NextResponse.json(
       { ok: false, error: "Failed to generate suggestions" },
       { status: 500 }

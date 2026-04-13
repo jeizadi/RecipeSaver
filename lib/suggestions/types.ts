@@ -4,6 +4,8 @@ export type SuggestionInput = {
   limit?: number;
   includeWebCandidates?: boolean;
   strictFitness?: boolean;
+  embeddingEnabled?: boolean;
+  llmEnabled?: boolean;
 };
 
 export type ParsedProfile = {
@@ -20,6 +22,9 @@ export type ParsedProfile = {
   favoriteIngredients: string[];
   dislikedIngredients: string[];
   explorationRatio: number;
+  weeklyBudgetCents: number | null;
+  budgetToleranceRatio: number;
+  trustedSourceRatio: number;
 };
 
 export type CandidateRecipe = {
@@ -33,6 +38,8 @@ export type CandidateRecipe = {
   tags: string;
   createdAt: Date | null;
   isWebCandidate: boolean;
+  estimatedCostCents: number | null;
+  costConfidence: number;
 };
 
 export type CandidateFeatures = {
@@ -46,11 +53,35 @@ export type FeedbackStats = {
   byRecipeId: Record<number, number>;
   byDomain: Record<string, number>;
   ingredientAffinity: Record<string, number>;
+  recipeRatings: Record<number, number>;
+  cookedCounts: Record<number, number>;
+};
+
+export type BehaviorStats = {
+  recipeFrequency: Record<number, number>;
+  domainAffinity: Record<string, number>;
+  ingredientAffinity: Record<string, number>;
+  recentCookedRecipeIds: number[];
+};
+
+export type PreferenceVector = {
+  version: number;
+  values: number[];
+  dimensions: {
+    favoriteIngredients: number;
+    preferredDomains: number;
+    cookedHistory: number;
+    ratings: number;
+    exploration: number;
+    budgetSensitivity: number;
+    healthFocus: number;
+  };
 };
 
 export type ScoredSuggestion = {
   candidate: CandidateRecipe;
   score: number;
+  lane: "repeat_favorite" | "trusted_similar" | "explore";
   reasons: string[];
   components: {
     ingredient: number;
@@ -59,5 +90,20 @@ export type ScoredSuggestion = {
     feedback: number;
     novelty: number;
     exploration: number;
+    budget: number;
+    similarity: number;
+    repeat: number;
+    fatigue: number;
   };
+  budgetImpact: {
+    estimatedCostCents: number;
+    confidence: number;
+    fitScore: number;
+  };
+};
+
+export type SuggestionDiagnostics = {
+  topIngredients: Array<{ name: string; score: number }>;
+  topDomains: Array<{ domain: string; score: number }>;
+  mostCookedRecipeIds: number[];
 };

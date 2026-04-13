@@ -10,6 +10,9 @@ type Profile = {
   favoriteIngredients: string[];
   dislikedIngredients: string[];
   explorationRatio: number;
+  weeklyBudgetCents: number | null;
+  budgetToleranceRatio: number;
+  trustedSourceRatio: number;
 };
 
 function asCsv(xs: string[]) {
@@ -31,6 +34,9 @@ export function ProfileForm() {
   const [favoriteIngredients, setFavoriteIngredients] = useState("");
   const [dislikedIngredients, setDislikedIngredients] = useState("");
   const [explorationRatio, setExplorationRatio] = useState(0.35);
+  const [weeklyBudgetCents, setWeeklyBudgetCents] = useState<number | "">("");
+  const [budgetToleranceRatio, setBudgetToleranceRatio] = useState(0.15);
+  const [trustedSourceRatio, setTrustedSourceRatio] = useState(0.65);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -48,6 +54,15 @@ export function ProfileForm() {
         setDislikedIngredients(asCsv(p.dislikedIngredients ?? []));
         setExplorationRatio(
           typeof p.explorationRatio === "number" ? p.explorationRatio : 0.35
+        );
+        setWeeklyBudgetCents(
+          typeof p.weeklyBudgetCents === "number" ? p.weeklyBudgetCents : ""
+        );
+        setBudgetToleranceRatio(
+          typeof p.budgetToleranceRatio === "number" ? p.budgetToleranceRatio : 0.15
+        );
+        setTrustedSourceRatio(
+          typeof p.trustedSourceRatio === "number" ? p.trustedSourceRatio : 0.65
         );
       })
       .catch(() => undefined);
@@ -67,6 +82,10 @@ export function ProfileForm() {
         favoriteIngredients: parseCsv(favoriteIngredients),
         dislikedIngredients: parseCsv(dislikedIngredients),
         explorationRatio,
+        weeklyBudgetCents:
+          typeof weeklyBudgetCents === "number" ? weeklyBudgetCents : undefined,
+        budgetToleranceRatio,
+        trustedSourceRatio,
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -119,6 +138,44 @@ export function ProfileForm() {
           step={0.05}
           value={explorationRatio}
           onChange={(e) => setExplorationRatio(Number(e.target.value))}
+          className="w-full rounded border border-[#d2c2af] px-3 py-2"
+        />
+      </label>
+      <label className="block text-sm">
+        <span className="mb-1 block text-[#7f8c8d]">Weekly budget target ($)</span>
+        <input
+          type="number"
+          min={0}
+          value={weeklyBudgetCents === "" ? "" : Math.round(weeklyBudgetCents / 100)}
+          onChange={(e) =>
+            setWeeklyBudgetCents(
+              e.target.value === "" ? "" : Math.max(0, Math.round(Number(e.target.value) * 100))
+            )
+          }
+          className="w-full rounded border border-[#d2c2af] px-3 py-2"
+        />
+      </label>
+      <label className="block text-sm">
+        <span className="mb-1 block text-[#7f8c8d]">Budget tolerance ratio (0-1)</span>
+        <input
+          type="number"
+          min={0.01}
+          max={0.9}
+          step={0.01}
+          value={budgetToleranceRatio}
+          onChange={(e) => setBudgetToleranceRatio(Number(e.target.value))}
+          className="w-full rounded border border-[#d2c2af] px-3 py-2"
+        />
+      </label>
+      <label className="block text-sm">
+        <span className="mb-1 block text-[#7f8c8d]">Trusted source ratio (0-1)</span>
+        <input
+          type="number"
+          min={0}
+          max={1}
+          step={0.05}
+          value={trustedSourceRatio}
+          onChange={(e) => setTrustedSourceRatio(Number(e.target.value))}
           className="w-full rounded border border-[#d2c2af] px-3 py-2"
         />
       </label>

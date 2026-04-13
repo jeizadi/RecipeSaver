@@ -1,10 +1,12 @@
 import { extractCandidateFeatures } from "./feature-extract";
 import type {
-  CandidateRecipe,
+  BehaviorStats,
   FeedbackStats,
   ParsedProfile,
   ScoredSuggestion,
 } from "./types";
+import type { SimilarityDecoratedCandidate } from "./similarity";
+import { budgetFitScore } from "./budget";
 
 function overlapScore(haystack: string[], needles: string[]): number {
   if (!needles.length || !haystack.length) return 0;
@@ -32,11 +34,14 @@ function fitnessScore(profile: ParsedProfile, text: string): number {
 }
 
 export function scoreCandidate(
-  candidate: CandidateRecipe,
+  decorated: SimilarityDecoratedCandidate,
   profile: ParsedProfile,
   stats: FeedbackStats,
-  medianCreatedAt: Date
+  behavior: BehaviorStats,
+  medianCreatedAt: Date,
+  mealCountHint: number
 ): ScoredSuggestion {
+  const candidate = decorated.candidate;
   const features = extractCandidateFeatures(candidate);
 
   const ingredientAffinity =
@@ -50,7 +55,8 @@ export function scoreCandidate(
   const historical =
     (candidate.recipeId != null ? stats.byRecipeId[candidate.recipeId] ?? 0 : 0) +
     features.ingredientKeys.reduce(
-      (acc, k) => acc + (stats.ingredientAffinity[k] ?? 0),
+      (acc, k) =>
+        acc + (stats.ingredientAffinity[k] ?? 0) + (behavior.ingredientAffinity[k] ?? 0),
       0
     ) *
       0.08;
@@ -68,13 +74,34 @@ export function scoreCandidate(
       ? 0.7 * profile.explorationRatio
       : 0;
 
+  const repeatScore =
+    candidate.recipeId != null
+      ? (behavior.recipeFrequency[candidate.recipeId] ?? 0) * 0.12 +
+        (stats.cookedCounts[candidate.recipeId] ?? 0) * 0.08 +
+        (stats.recipeRatings[candidate.recipeId] ?? 0) * 0.03
+      : 0;
+
+  const fatiguePenalty =
+    candidate.recipeId != null &&
+    behavior.recentCookedRecipeIds.slice(0, 4).includes(candidate.recipeId)
+      ? 0.45
+      : 0;
+
+  const estimatedCostCents = Math.max(250, candidate.estimatedCostCents ?? 900);
+  const budget = budgetFitScore(estimatedCostCents, profile, mealCountHint);
+  const similarity = decorated.similarityScore;
+
   const score =
     ingredientAffinity * 2.5 +
     domainAffinity * 1.8 +
     fitness * 1.6 +
     historical * 1.8 +
     novelty +
-    exploration;
+    exploration +
+    budget * 1.1 +
+    similarity * 1.35 +
+    repeatScore * 1.2 -
+    fatiguePenalty;
 
   const reasons: string[] = [];
   if (ingredientAffinity > 0.2) reasons.push("matches ingredients you like");
@@ -82,11 +109,16 @@ export function scoreCandidate(
   if (exploration > 0.1) reasons.push("new source to keep variety");
   if (fitness > 0.2) reasons.push("fits your fitness goal");
   if (historical > 0.5) reasons.push("based on your past feedback");
+  if (repeatScore > 0.3) reasons.push("you cook and rate similar recipes often");
+  if (budget > 0.2) reasons.push("fits your weekly budget target");
+  if (similarity > 0.4) reasons.push("similar to your taste profile");
+  if (fatiguePenalty > 0.2) reasons.push("slightly de-prioritized to avoid repeats");
   if (reasons.length === 0) reasons.push("balanced pick for variety");
 
   return {
     candidate,
     score,
+    lane: decorated.lane,
     reasons,
     components: {
       ingredient: ingredientAffinity,
@@ -95,6 +127,15 @@ export function scoreCandidate(
       feedback: historical,
       novelty,
       exploration,
+      budget,
+      similarity,
+      repeat: repeatScore,
+      fatigue: fatiguePenalty,
+    },
+    budgetImpact: {
+      estimatedCostCents,
+      confidence: Math.min(1, Math.max(0, candidate.costConfidence || 0.5)),
+      fitScore: budget,
     },
   };
 }

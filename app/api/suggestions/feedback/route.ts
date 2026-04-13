@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { buildBehaviorStats, storeBehaviorStats } from "@/lib/suggestions/behavior";
 import { normalizeDomain } from "@/lib/suggestions/feature-extract";
 import { getCurrentUserFromRequest } from "@/lib/auth";
 
@@ -64,6 +65,8 @@ export async function POST(request: NextRequest) {
         note,
       },
     });
+    const behavior = await buildBehaviorStats(user.id);
+    await storeBehaviorStats(user.id, behavior);
 
     return NextResponse.json({ ok: true, feedbackId: row.id });
   } catch (e) {
