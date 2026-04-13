@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/require-user";
+import { IngredientsCopyReadOnly } from "../ingredients-with-copy";
 
 const CATEGORIES: Record<string, string> = {
   breakfast: "Breakfast",
@@ -51,12 +52,7 @@ export default async function RecipePage({
         </p>
       </header>
 
-      <section className="mb-6">
-        <h3 className="mb-2 font-medium">Ingredients</h3>
-        <pre className="whitespace-pre-wrap rounded border border-[#e0d4c7] bg-[#fffdf8] p-4 text-sm">
-          {recipe.ingredientsText}
-        </pre>
-      </section>
+      <IngredientsCopyReadOnly text={recipe.ingredientsText} />
 
       {recipe.instructionsText && (
         <section className="mb-6">

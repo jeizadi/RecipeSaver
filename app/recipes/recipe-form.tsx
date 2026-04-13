@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useClipboardCopyWithUndo } from "@/lib/use-clipboard-copy-with-undo";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { removeLastMergedRecipeBlocks } from "@/lib/merge-recipe-text";
 import {
   LinkedRecipeHints,
@@ -69,6 +70,22 @@ export function RecipeForm({
   const [linkHintsScanNonce, setLinkHintsScanNonce] = useState(0);
 
   const [form, setForm] = useState(initial);
+  const ingredientsCopy = useClipboardCopyWithUndo(form.ingredientsText);
+  const dismissIngredientsCopyRef = useRef(ingredientsCopy.dismiss);
+  dismissIngredientsCopyRef.current = ingredientsCopy.dismiss;
+
+  useEffect(() => {
+    dismissIngredientsCopyRef.current();
+  }, [form.ingredientsText]);
+
+  const handleCopyIngredients = useCallback(async () => {
+    try {
+      await ingredientsCopy.copy();
+    } catch {
+      setStatus("Could not copy ingredients (clipboard blocked or unavailable).");
+      setStatusError(true);
+    }
+  }, [ingredientsCopy]);
 
   function setValue<K extends keyof RecipeFormInitial>(
     key: K,
@@ -334,13 +351,46 @@ export function RecipeForm({
       </div>
 
       <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium">Ingredients *</label>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <label className="text-sm font-medium" htmlFor="recipe-ingredients">
+            Ingredients *
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            {ingredientsCopy.copied ? (
+              <>
+                <span className="text-xs font-medium text-[#1e8449]">
+                  Copied to clipboard
+                </span>
+                <button
+                  type="button"
+                  className="rounded border border-[#7dcea0] bg-white px-2 py-1 text-xs font-medium text-[#1e8449] hover:bg-[#eafaf1]"
+                  onClick={() => void ingredientsCopy.undo()}
+                >
+                  Undo
+                </button>
+              </>
+            ) : null}
+            <button
+              type="button"
+              disabled={ingredientsCopy.copied}
+              onClick={() => void handleCopyIngredients()}
+              className="rounded border border-[#d2c2af] bg-white px-2 py-1 text-xs font-medium hover:bg-[#f6efe9] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Copy
+            </button>
+          </div>
+        </div>
         <textarea
+          id="recipe-ingredients"
           value={form.ingredientsText}
           onChange={(e) => setValue("ingredientsText", e.target.value)}
           required
           rows={6}
-          className="rounded border border-[#d2c2af] px-2 py-1.5 text-sm"
+          className={`rounded border px-2 py-1.5 text-sm transition-opacity duration-200 ${
+            ingredientsCopy.copied
+              ? "border-[#c5dcc0] bg-[#f4faf3] opacity-45"
+              : "border-[#d2c2af] opacity-100"
+          }`}
         />
       </div>
 
