@@ -44,6 +44,12 @@ export default function RootLayout({
             </h1>
             <nav className="flex items-center gap-2">
               <Link
+                href="/weekly"
+                className="rounded border border-[#d2c2af] bg-white px-3 py-1.5 text-sm font-medium text-[#5b3b2a] hover:bg-[#f6efe9]"
+              >
+                Weekly Plan
+              </Link>
+              <Link
                 href="/suggestions"
                 className="rounded border border-[#d2c2af] bg-white px-3 py-1.5 text-sm font-medium text-[#5b3b2a] hover:bg-[#f6efe9]"
               >

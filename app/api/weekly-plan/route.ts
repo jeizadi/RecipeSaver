@@ -7,10 +7,28 @@ import { normalizeDomain } from "@/lib/suggestions/feature-extract";
 export async function GET(request: NextRequest) {
   const user = await getCurrentUserFromRequest(request);
   if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  const url = new URL(request.url);
+  const start = url.searchParams.get("start");
+  const end = url.searchParams.get("end");
+  const parsedStart = start ? new Date(start) : null;
+  const parsedEnd = end ? new Date(end) : null;
+  const hasRange =
+    parsedStart != null &&
+    parsedEnd != null &&
+    !Number.isNaN(parsedStart.getTime()) &&
+    !Number.isNaN(parsedEnd.getTime());
   const rows = await prisma.weeklyMealPlan.findMany({
-    where: { userId: user.id },
+    where: hasRange
+      ? {
+          userId: user.id,
+          plannedFor: {
+            gte: parsedStart!,
+            lte: parsedEnd!,
+          },
+        }
+      : { userId: user.id },
     orderBy: { plannedFor: "asc" },
-    take: 50,
+    take: hasRange ? 200 : 50,
     include: { recipe: { select: { id: true, title: true } } },
   });
   return NextResponse.json({ ok: true, items: rows });
