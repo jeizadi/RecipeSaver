@@ -77,6 +77,9 @@ export function WeeklyPlannerClient({ recipes }: Props) {
   const [suggestionsInfo, setSuggestionsInfo] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<SuggestionRow[]>([]);
   const [feedbackBusyKey, setFeedbackBusyKey] = useState<string | null>(null);
+  const [feedbackByKey, setFeedbackByKey] = useState<
+    Record<string, "like" | "dislike" | "skip">
+  >({});
   const [plannedForDate, setPlannedForDate] = useState("");
   const [weeklyPlans, setWeeklyPlans] = useState<
     { id: number; recipeId: number; plannedFor: string; status: string; rating: number | null; recipe: { id: number; title: string } }[]
@@ -284,6 +287,7 @@ export function WeeklyPlannerClient({ recipes }: Props) {
         return;
       }
       setSuggestions(data.suggestions ?? []);
+      setFeedbackByKey({});
       setSuggestionsInfo(
         `Ranked ${data.totals?.returned ?? 0} suggestions from ${data.totals?.passedFilters ?? 0} candidates.`
       );
@@ -299,10 +303,14 @@ export function WeeklyPlannerClient({ recipes }: Props) {
     item: SuggestionRow,
     signal: "like" | "dislike" | "skip" | "add_to_plan" | "cooked"
   ) {
-    const key = `${signal}-${item.recipeId ?? item.sourceUrl ?? item.title}`;
+    const baseKey = `${item.recipeId ?? "web"}::${item.sourceUrl ?? item.title}`;
+    const key = `${signal}-${baseKey}`;
+    const undo =
+      (signal === "like" || signal === "dislike" || signal === "skip") &&
+      feedbackByKey[baseKey] === signal;
     setFeedbackBusyKey(key);
     try {
-      await fetch("/api/suggestions/feedback", {
+      const res = await fetch("/api/suggestions/feedback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -310,8 +318,19 @@ export function WeeklyPlannerClient({ recipes }: Props) {
           sourceUrl: item.sourceUrl,
           sourceDomain: item.sourceDomain,
           signal,
+          undo,
         }),
       });
+      const data = await res.json().catch(() => ({}));
+      if (!data.ok) return;
+      if (signal === "like" || signal === "dislike" || signal === "skip") {
+        setFeedbackByKey((prev) => {
+          const next = { ...prev };
+          if (undo) delete next[baseKey];
+          else next[baseKey] = signal;
+          return next;
+        });
+      }
     } finally {
       setFeedbackBusyKey(null);
     }
@@ -719,25 +738,40 @@ export function WeeklyPlannerClient({ recipes }: Props) {
                       </button>
                       <button
                         type="button"
-                        disabled={feedbackBusyKey === `like-${s.recipeId ?? s.sourceUrl ?? s.title}`}
+                        disabled={feedbackBusyKey === `like-${s.recipeId ?? "web"}::${s.sourceUrl ?? s.title}`}
+                        aria-pressed={feedbackByKey[`${s.recipeId ?? "web"}::${s.sourceUrl ?? s.title}`] === "like"}
                         onClick={() => sendFeedback(s, "like")}
-                        className="underline"
+                        className={`rounded px-2 py-0.5 ${
+                          feedbackByKey[`${s.recipeId ?? "web"}::${s.sourceUrl ?? s.title}`] === "like"
+                            ? "bg-[#eafaf1] font-semibold text-[#1e8449]"
+                            : "underline"
+                        }`}
                       >
                         Like
                       </button>
                       <button
                         type="button"
-                        disabled={feedbackBusyKey === `dislike-${s.recipeId ?? s.sourceUrl ?? s.title}`}
+                        disabled={feedbackBusyKey === `dislike-${s.recipeId ?? "web"}::${s.sourceUrl ?? s.title}`}
+                        aria-pressed={feedbackByKey[`${s.recipeId ?? "web"}::${s.sourceUrl ?? s.title}`] === "dislike"}
                         onClick={() => sendFeedback(s, "dislike")}
-                        className="underline"
+                        className={`rounded px-2 py-0.5 ${
+                          feedbackByKey[`${s.recipeId ?? "web"}::${s.sourceUrl ?? s.title}`] === "dislike"
+                            ? "bg-[#fdecea] font-semibold text-[#c0392b]"
+                            : "underline"
+                        }`}
                       >
                         Dislike
                       </button>
                       <button
                         type="button"
-                        disabled={feedbackBusyKey === `skip-${s.recipeId ?? s.sourceUrl ?? s.title}`}
+                        disabled={feedbackBusyKey === `skip-${s.recipeId ?? "web"}::${s.sourceUrl ?? s.title}`}
+                        aria-pressed={feedbackByKey[`${s.recipeId ?? "web"}::${s.sourceUrl ?? s.title}`] === "skip"}
                         onClick={() => sendFeedback(s, "skip")}
-                        className="underline"
+                        className={`rounded px-2 py-0.5 ${
+                          feedbackByKey[`${s.recipeId ?? "web"}::${s.sourceUrl ?? s.title}`] === "skip"
+                            ? "bg-[#eef1f2] font-semibold text-[#566573]"
+                            : "underline"
+                        }`}
                       >
                         Skip
                       </button>

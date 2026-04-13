@@ -40,27 +40,53 @@ export async function POST(request: NextRequest) {
         ? Math.round(body.rating)
         : null;
     const note = typeof body.note === "string" ? body.note.slice(0, 500) : "";
+    const undo = Boolean(body.undo);
+    const signalEnum = signal as
+      | "like"
+      | "dislike"
+      | "skip"
+      | "add_to_plan"
+      | "cooked"
+      | "rate";
+
+    const resolvedRecipeId =
+      recipeId != null
+        ? (
+            await prisma.recipe.findFirst({
+              where: { id: recipeId, userId: user.id },
+              select: { id: true },
+            })
+          )?.id ?? null
+        : null;
+
+    if (undo) {
+      const row = await prisma.recipeFeedback.findFirst({
+        where:
+          resolvedRecipeId != null
+            ? { recipeId: resolvedRecipeId, signal: signalEnum }
+            : {
+                recipeId: null,
+                candidateUrl,
+                sourceDomain,
+                signal: signalEnum,
+              },
+        orderBy: { createdAt: "desc" },
+        select: { id: true },
+      });
+      if (row) {
+        await prisma.recipeFeedback.delete({ where: { id: row.id } });
+      }
+      const behavior = await buildBehaviorStats(user.id);
+      await storeBehaviorStats(user.id, behavior);
+      return NextResponse.json({ ok: true, undone: true });
+    }
 
     const row = await prisma.recipeFeedback.create({
       data: {
-        recipeId:
-          recipeId != null
-            ? (
-                await prisma.recipe.findFirst({
-                  where: { id: recipeId, userId: user.id },
-                  select: { id: true },
-                })
-              )?.id ?? null
-            : null,
+        recipeId: resolvedRecipeId,
         candidateUrl,
         sourceDomain,
-        signal: signal as
-          | "like"
-          | "dislike"
-          | "skip"
-          | "add_to_plan"
-          | "cooked"
-          | "rate",
+        signal: signalEnum,
         rating,
         note,
       },

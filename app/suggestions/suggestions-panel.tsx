@@ -47,6 +47,14 @@ export function SuggestionsPanel() {
     estimatedWeeklyCostCents?: number;
     budgetTargetCents?: number | null;
   } | null>(null);
+  const [feedbackByKey, setFeedbackByKey] = useState<
+    Record<string, "like" | "dislike" | "skip">
+  >({});
+  const [feedbackBusyKey, setFeedbackBusyKey] = useState<string | null>(null);
+
+  function suggestionKey(s: Suggestion): string {
+    return `${s.recipeId ?? "web"}::${s.sourceUrl ?? s.title}`;
+  }
 
   async function generate() {
     setLoading(true);
@@ -69,6 +77,7 @@ export function SuggestionsPanel() {
       return;
     }
     setSuggestions(data.suggestions ?? []);
+    setFeedbackByKey({});
     setDiagnostics(data.diagnostics ?? null);
     setTotals(data.totals ?? null);
     setStatus(`Generated ${data.suggestions?.length ?? 0} suggestions.`);
@@ -91,9 +100,12 @@ export function SuggestionsPanel() {
 
   async function feedback(
     s: Suggestion,
-    signal: "like" | "dislike" | "skip" | "add_to_plan" | "cooked"
+    signal: "like" | "dislike" | "skip"
   ) {
-    await fetch("/api/suggestions/feedback", {
+    const key = suggestionKey(s);
+    const already = feedbackByKey[key] === signal;
+    setFeedbackBusyKey(`${key}::${signal}`);
+    const res = await fetch("/api/suggestions/feedback", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -101,7 +113,17 @@ export function SuggestionsPanel() {
         sourceUrl: s.sourceUrl,
         sourceDomain: s.sourceDomain,
         signal,
+        undo: already,
       }),
+    });
+    setFeedbackBusyKey(null);
+    const data = await res.json().catch(() => ({}));
+    if (!data.ok) return;
+    setFeedbackByKey((prev) => {
+      const next = { ...prev };
+      if (already) delete next[key];
+      else next[key] = signal;
+      return next;
     });
   }
 
@@ -198,11 +220,55 @@ export function SuggestionsPanel() {
             </div>
             <p className="mt-1 text-xs text-[#5b3b2a]">{s.reasons.join(" · ")}</p>
             <div className="mt-2 flex flex-wrap gap-2 text-xs">
+              {(() => {
+                const key = suggestionKey(s);
+                const active = feedbackByKey[key] ?? null;
+                const likeOn = active === "like";
+                const dislikeOn = active === "dislike";
+                const skipOn = active === "skip";
+                const likeBusy = feedbackBusyKey === `${key}::like`;
+                const dislikeBusy = feedbackBusyKey === `${key}::dislike`;
+                const skipBusy = feedbackBusyKey === `${key}::skip`;
+                return (
+                  <>
               {s.recipeId ? <a href={`/recipes/${s.recipeId}`} className="underline">Open recipe</a> : null}
               {s.sourceUrl ? <a href={s.sourceUrl} target="_blank" rel="noopener noreferrer" className="underline">Source</a> : null}
-              <button type="button" className="underline" onClick={() => feedback(s, "like")}>Like</button>
-              <button type="button" className="underline" onClick={() => feedback(s, "dislike")}>Dislike</button>
-              <button type="button" className="underline" onClick={() => feedback(s, "skip")}>Skip</button>
+              <button
+                type="button"
+                disabled={likeBusy}
+                aria-pressed={likeOn}
+                className={`rounded px-2 py-0.5 ${
+                  likeOn ? "bg-[#eafaf1] font-semibold text-[#1e8449]" : "underline"
+                } disabled:opacity-60`}
+                onClick={() => feedback(s, "like")}
+              >
+                Like
+              </button>
+              <button
+                type="button"
+                disabled={dislikeBusy}
+                aria-pressed={dislikeOn}
+                className={`rounded px-2 py-0.5 ${
+                  dislikeOn ? "bg-[#fdecea] font-semibold text-[#c0392b]" : "underline"
+                } disabled:opacity-60`}
+                onClick={() => feedback(s, "dislike")}
+              >
+                Dislike
+              </button>
+              <button
+                type="button"
+                disabled={skipBusy}
+                aria-pressed={skipOn}
+                className={`rounded px-2 py-0.5 ${
+                  skipOn ? "bg-[#eef1f2] font-semibold text-[#566573]" : "underline"
+                } disabled:opacity-60`}
+                onClick={() => feedback(s, "skip")}
+              >
+                Skip
+              </button>
+                  </>
+                );
+              })()}
             </div>
           </li>
         ))}
