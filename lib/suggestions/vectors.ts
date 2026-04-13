@@ -7,6 +7,33 @@ import type {
   PreferenceVector,
 } from "./types";
 
+function preferenceVectorModel() {
+  return (prisma as unknown as {
+    userPreferenceVector?: {
+      upsert: (args: {
+        where: { userId: number };
+        update: Record<string, string | number>;
+        create: Record<string, string | number>;
+      }) => Promise<unknown>;
+      findUnique: (args: { where: { userId: number } }) => Promise<{
+        localVectorJson: string;
+      } | null>;
+    };
+  }).userPreferenceVector;
+}
+
+function recipeVectorSnapshotModel() {
+  return (prisma as unknown as {
+    recipeVectorSnapshot?: {
+      upsert: (args: {
+        where: { recipeFeatureId: number };
+        update: Record<string, string | number>;
+        create: Record<string, string | number>;
+      }) => Promise<unknown>;
+    };
+  }).recipeVectorSnapshot;
+}
+
 function clamp(v: number, min = 0, max = 1): number {
   return Math.max(min, Math.min(max, v));
 }
@@ -73,7 +100,9 @@ export async function upsertUserPreferenceVector(
   vector: PreferenceVector
 ) {
   if (userId == null) return;
-  await prisma.userPreferenceVector.upsert({
+  const model = preferenceVectorModel();
+  if (!model?.upsert) return;
+  await model.upsert({
     where: { userId },
     update: {
       vectorVersion: vector.version,
@@ -91,7 +120,9 @@ export async function getStoredUserPreferenceVector(
   userId: number | undefined
 ): Promise<PreferenceVector | null> {
   if (userId == null) return null;
-  const row = await prisma.userPreferenceVector.findUnique({ where: { userId } });
+  const model = preferenceVectorModel();
+  if (!model?.findUnique) return null;
+  const row = await model.findUnique({ where: { userId } });
   if (!row) return null;
   return parseVector(row.localVectorJson);
 }
@@ -114,6 +145,8 @@ export function buildLocalRecipeVector(candidate: CandidateRecipe): number[] {
 }
 
 export async function upsertRecipeVectorSnapshots(candidates: CandidateRecipe[]) {
+  const vectorModel = recipeVectorSnapshotModel();
+  if (!vectorModel?.upsert) return;
   const unique = new Map<number, CandidateRecipe>();
   for (const c of candidates) {
     if (c.recipeId == null) continue;
@@ -133,7 +166,7 @@ export async function upsertRecipeVectorSnapshots(candidates: CandidateRecipe[])
     const recipeFeatureId = byRecipeId.get(c.recipeId);
     if (!recipeFeatureId) continue;
     const local = buildLocalRecipeVector(c);
-    await prisma.recipeVectorSnapshot.upsert({
+    await vectorModel.upsert({
       where: { recipeFeatureId },
       update: {
         vectorVersion: 1,
