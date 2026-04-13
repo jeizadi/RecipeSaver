@@ -96,9 +96,10 @@ export async function buildBehaviorStats(userId: number): Promise<BehaviorStats>
 
   for (const row of weeklyRows) {
     const recipe = row.recipe;
-    if (row.status !== "cooked") continue;
     recipeFrequency[recipe.id] = (recipeFrequency[recipe.id] ?? 0) + 1;
-    recentCookedRecipeIds.push(recipe.id);
+    if (row.status === "cooked") {
+      recentCookedRecipeIds.push(recipe.id);
+    }
     increment(domainAffinity, normalizeDomain(recipe.sourceUrl), 0.5);
 
     const features = extractCandidateFeatures({
@@ -117,11 +118,6 @@ export async function buildBehaviorStats(userId: number): Promise<BehaviorStats>
     });
     for (const k of features.ingredientKeys) {
       increment(ingredientAffinity, k, 0.2);
-    }
-    if (typeof row.rating === "number") {
-      const weight = (row.rating - 3) * 0.4;
-      increment(domainAffinity, normalizeDomain(recipe.sourceUrl), weight);
-      for (const k of features.ingredientKeys) increment(ingredientAffinity, k, weight * 0.35);
     }
   }
 

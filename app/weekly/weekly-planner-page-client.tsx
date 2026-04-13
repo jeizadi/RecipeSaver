@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type RecipeOption = { id: number; title: string; category: string };
 
@@ -22,24 +22,49 @@ type DayKey =
   | "saturday"
   | "sunday";
 
-const dayOrder: DayKey[] = [
-  "monday",
-  "tuesday",
-  "wednesday",
-  "thursday",
-  "friday",
-  "saturday",
-  "sunday",
-];
+type WeekStartPreference = "monday" | "sunday";
+
+function initialWeekStartPreference(): WeekStartPreference {
+  if (typeof window === "undefined") return "monday";
+  const stored = window.localStorage.getItem("weeklyPlanner.weekStart");
+  return stored === "sunday" ? "sunday" : "monday";
+}
 
 function dayLabel(key: DayKey): string {
   return key.charAt(0).toUpperCase() + key.slice(1);
 }
 
-function startOfWeekMonday(base = new Date()): Date {
+function orderedDays(weekStartPreference: WeekStartPreference): DayKey[] {
+  return weekStartPreference === "sunday"
+    ? [
+        "sunday",
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+      ]
+    : [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday",
+      ];
+}
+
+function startOfWeek(base = new Date(), weekStartPreference: WeekStartPreference): Date {
   const d = new Date(base);
-  const day = d.getDay(); // 0 Sun..6 Sat
-  const diff = day === 0 ? -6 : 1 - day;
+  const day = d.getDay();
+  const diff =
+    weekStartPreference === "sunday"
+      ? -day
+      : day === 0
+        ? -6
+        : 1 - day;
   d.setDate(d.getDate() + diff);
   d.setHours(0, 0, 0, 0);
   return d;
@@ -59,8 +84,11 @@ export function WeeklyPlannerPageClient({
   recipes: RecipeOption[];
   initialItems: WeeklyItem[];
 }) {
+  const initialPref = initialWeekStartPreference();
   const [items, setItems] = useState<WeeklyItem[]>(initialItems);
-  const [weekStart, setWeekStart] = useState<Date>(startOfWeekMonday(new Date()));
+  const [weekStartPreference, setWeekStartPreference] =
+    useState<WeekStartPreference>(initialPref);
+  const [weekStart, setWeekStart] = useState<Date>(startOfWeek(new Date(), initialPref));
   const [addByDay, setAddByDay] = useState<Record<DayKey, string>>({
     monday: "",
     tuesday: "",
@@ -72,6 +100,29 @@ export function WeeklyPlannerPageClient({
   });
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
+  const dayOrder = useMemo(
+    () => orderedDays(weekStartPreference),
+    [weekStartPreference]
+  );
+
+  const refreshWeek = useCallback(
+    async (targetStart: Date) => {
+      const start = toIsoDate(targetStart);
+      const endDate = new Date(targetStart);
+      endDate.setDate(endDate.getDate() + 6);
+      const end = toIsoDate(endDate);
+      const res = await fetch(`/api/weekly-plan?start=${start}&end=${end}`);
+      const data = await res.json().catch(() => ({ items: [] }));
+      if (data.ok) setItems(data.items ?? []);
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("weeklyPlanner.weekStart", weekStartPreference);
+    }
+  }, [weekStartPreference]);
 
   const weekDates = useMemo(() => {
     const out: Record<DayKey, string> = {
@@ -89,7 +140,7 @@ export function WeeklyPlannerPageClient({
       out[k] = toIsoDate(d);
     });
     return out;
-  }, [weekStart]);
+  }, [weekStart, dayOrder]);
 
   const byDay = useMemo(() => {
     const out: Record<DayKey, WeeklyItem[]> = {
@@ -114,7 +165,7 @@ export function WeeklyPlannerPageClient({
       );
     }
     return out;
-  }, [items, weekDates]);
+  }, [items, weekDates, dayOrder]);
 
   const uniqueWeekRecipes = useMemo(() => {
     const m = new Map<number, string>();
@@ -125,16 +176,6 @@ export function WeeklyPlannerPageClient({
       .map(([id, title]) => ({ id, title }))
       .sort((a, b) => a.title.localeCompare(b.title));
   }, [items]);
-
-  async function refreshWeek(targetStart = weekStart) {
-    const start = toIsoDate(targetStart);
-    const endDate = new Date(targetStart);
-    endDate.setDate(endDate.getDate() + 6);
-    const end = toIsoDate(endDate);
-    const res = await fetch(`/api/weekly-plan?start=${start}&end=${end}`);
-    const data = await res.json().catch(() => ({ items: [] }));
-    if (data.ok) setItems(data.items ?? []);
-  }
 
   async function addRecipe(day: DayKey) {
     const selected = Number(addByDay[day]);
@@ -157,7 +198,7 @@ export function WeeklyPlannerPageClient({
     }
     setStatus(`Added to ${dayLabel(day)}.`);
     setAddByDay((prev) => ({ ...prev, [day]: "" }));
-    await refreshWeek();
+    await refreshWeek(weekStart);
   }
 
   async function setMealStatus(item: WeeklyItem, statusValue: "planned" | "cooked" | "skipped") {
@@ -168,7 +209,7 @@ export function WeeklyPlannerPageClient({
       body: JSON.stringify({ id: item.id, status: statusValue }),
     });
     setBusy(false);
-    await refreshWeek();
+    await refreshWeek(weekStart);
   }
 
   function shiftWeek(deltaDays: number) {
@@ -185,10 +226,27 @@ export function WeeklyPlannerPageClient({
         <div>
           <h2 className="text-xl font-semibold">Weekly plan</h2>
           <p className="text-sm text-[#7f8c8d]">
-            Assign recipes to specific days and track what you actually cooked.
+            Assign recipes to specific days. Suggestions learn from repetition frequency.
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <label className="rounded border border-[#d2c2af] bg-white px-2 py-1 text-sm">
+            Week starts:
+            <select
+              value={weekStartPreference}
+              onChange={(e) => {
+                const pref = e.target.value as WeekStartPreference;
+                setWeekStartPreference(pref);
+                const nextStart = startOfWeek(weekStart, pref);
+                setWeekStart(nextStart);
+                void refreshWeek(nextStart);
+              }}
+              className="ml-2 bg-transparent"
+            >
+              <option value="monday">Monday</option>
+              <option value="sunday">Sunday</option>
+            </select>
+          </label>
           <button
             type="button"
             onClick={() => shiftWeek(-7)}
@@ -215,6 +273,21 @@ export function WeeklyPlannerPageClient({
       </div>
 
       {status ? <p className="text-sm text-[#7f8c8d]">{status}</p> : null}
+
+      <section className="rounded border border-[#e0d4c7] bg-white p-4 shadow-sm">
+        <h3 className="font-semibold">This week&apos;s recipe list</h3>
+        {uniqueWeekRecipes.length === 0 ? (
+          <p className="mt-1 text-sm text-[#7f8c8d]">
+            No recipes assigned this week yet.
+          </p>
+        ) : (
+          <ul className="mt-2 list-inside list-disc text-sm">
+            {uniqueWeekRecipes.map((r) => (
+              <li key={r.id}>{r.title}</li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {dayOrder.map((day) => (
@@ -294,20 +367,6 @@ export function WeeklyPlannerPageClient({
         ))}
       </div>
 
-      <section className="rounded border border-[#e0d4c7] bg-white p-4 shadow-sm">
-        <h3 className="font-semibold">This week&apos;s recipe list</h3>
-        {uniqueWeekRecipes.length === 0 ? (
-          <p className="mt-1 text-sm text-[#7f8c8d]">
-            No recipes assigned this week yet.
-          </p>
-        ) : (
-          <ul className="mt-2 list-inside list-disc text-sm">
-            {uniqueWeekRecipes.map((r) => (
-              <li key={r.id}>{r.title}</li>
-            ))}
-          </ul>
-        )}
-      </section>
     </div>
   );
 }

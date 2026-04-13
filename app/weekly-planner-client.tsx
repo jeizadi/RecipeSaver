@@ -560,7 +560,12 @@ export function WeeklyPlannerClient({ recipes }: Props) {
         )}
 
         <div className="mt-4 border-t border-[#eadfce] pt-4">
-          <h3 className="mb-2 text-sm font-semibold">Weekly tracker</h3>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold">Weekly tracker</h3>
+            <a href="/weekly" className="text-xs underline text-[#5b3b2a]">
+              Open full weekly calendar
+            </a>
+          </div>
           <div className="flex items-center gap-2">
             <input
               type="date"
@@ -583,10 +588,9 @@ export function WeeklyPlannerClient({ recipes }: Props) {
                   <p className="font-medium">{w.recipe.title}</p>
                   <p className="text-[#7f8c8d]">{new Date(w.plannedFor).toDateString()} · {w.status}</p>
                   <div className="mt-1 flex gap-2">
+                    <button className="underline" onClick={() => updateWeeklyStatus(w.id, { status: "planned" })}>Planned</button>
                     <button className="underline" onClick={() => updateWeeklyStatus(w.id, { status: "cooked" })}>Cooked</button>
                     <button className="underline" onClick={() => updateWeeklyStatus(w.id, { status: "skipped" })}>Skipped</button>
-                    <button className="underline" onClick={() => updateWeeklyStatus(w.id, { rating: 5 })}>Rate 5</button>
-                    <button className="underline" onClick={() => updateWeeklyStatus(w.id, { rating: 3 })}>Rate 3</button>
                   </div>
                 </li>
               ))}

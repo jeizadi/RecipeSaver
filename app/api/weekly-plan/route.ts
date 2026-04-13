@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromRequest } from "@/lib/auth";
 import { buildBehaviorStats, storeBehaviorStats } from "@/lib/suggestions/behavior";
-import { normalizeDomain } from "@/lib/suggestions/feature-extract";
 
 export async function GET(request: NextRequest) {
   const user = await getCurrentUserFromRequest(request);
@@ -72,33 +71,6 @@ export async function PATCH(request: NextRequest) {
       notes: typeof body.notes === "string" ? body.notes : undefined,
     },
   });
-  const sourceDomain = normalizeDomain(
-    (
-      await prisma.recipe.findUnique({
-        where: { id: item.recipeId },
-        select: { sourceUrl: true },
-      })
-    )?.sourceUrl ?? null
-  );
-  if (body.status === "cooked") {
-    await prisma.recipeFeedback.create({
-      data: {
-        recipeId: item.recipeId,
-        sourceDomain,
-        signal: "cooked",
-      },
-    });
-  }
-  if (typeof body.rating === "number") {
-    await prisma.recipeFeedback.create({
-      data: {
-        recipeId: item.recipeId,
-        sourceDomain,
-        signal: "rate",
-        rating: Math.min(5, Math.max(1, Math.round(body.rating))),
-      },
-    });
-  }
   const behavior = await buildBehaviorStats(user.id);
   await storeBehaviorStats(user.id, behavior);
   return NextResponse.json({ ok: true, item });
