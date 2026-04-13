@@ -38,7 +38,11 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   const body = await request.json().catch(() => ({}));
   const recipeId = Number(body.recipeId);
-  const plannedFor = new Date(body.plannedFor);
+  const plannedForRaw = typeof body.plannedFor === "string" ? body.plannedFor : "";
+  const m = plannedForRaw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const plannedFor = m
+    ? new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12, 0, 0))
+    : new Date(NaN);
   if (!Number.isInteger(recipeId) || Number.isNaN(plannedFor.getTime())) {
     return NextResponse.json({ ok: false, error: "recipeId and plannedFor are required." }, { status: 400 });
   }
@@ -53,6 +57,22 @@ export async function POST(request: NextRequest) {
     },
   });
   return NextResponse.json({ ok: true, item });
+}
+
+export async function DELETE(request: NextRequest) {
+  const user = await getCurrentUserFromRequest(request);
+  if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  const body = await request.json().catch(() => ({}));
+  const id = Number(body.id);
+  if (!Number.isInteger(id)) {
+    return NextResponse.json({ ok: false, error: "id required" }, { status: 400 });
+  }
+  const existing = await prisma.weeklyMealPlan.findFirst({ where: { id, userId: user.id } });
+  if (!existing) return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
+  await prisma.weeklyMealPlan.delete({ where: { id } });
+  const behavior = await buildBehaviorStats(user.id);
+  await storeBehaviorStats(user.id, behavior);
+  return NextResponse.json({ ok: true });
 }
 
 export async function PATCH(request: NextRequest) {

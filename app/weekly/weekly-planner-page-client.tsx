@@ -77,6 +77,13 @@ function toIsoDate(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+function plannedItemDateKey(value: string): string {
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toISOString().slice(0, 10);
+}
+
 export function WeeklyPlannerPageClient({
   recipes,
   initialItems,
@@ -100,6 +107,7 @@ export function WeeklyPlannerPageClient({
   });
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
+  const [spanDays, setSpanDays] = useState(1);
   const dayOrder = useMemo(
     () => orderedDays(weekStartPreference),
     [weekStartPreference]
@@ -153,7 +161,7 @@ export function WeeklyPlannerPageClient({
       sunday: [],
     };
     for (const item of items) {
-      const date = toIsoDate(new Date(item.plannedFor));
+      const date = plannedItemDateKey(item.plannedFor);
       const key = (Object.entries(weekDates).find(([, v]) => v === date)?.[0] ??
         null) as DayKey | null;
       if (key) out[key].push(item);
@@ -184,29 +192,44 @@ export function WeeklyPlannerPageClient({
       return;
     }
     setBusy(true);
-    const plannedFor = weekDates[day];
-    const res = await fetch("/api/weekly-plan", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ recipeId: selected, plannedFor }),
-    });
-    const data = await res.json().catch(() => ({}));
+    const start = new Date(`${weekDates[day]}T12:00:00.000Z`);
+    let firstError: string | null = null;
+    let created = 0;
+    for (let i = 0; i < spanDays; i++) {
+      const d = new Date(start);
+      d.setUTCDate(d.getUTCDate() + i);
+      const plannedFor = d.toISOString().slice(0, 10);
+      const res = await fetch("/api/weekly-plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipeId: selected, plannedFor }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!data.ok && !firstError) {
+        firstError = data.error ?? "Could not add recipe to this day.";
+      }
+      if (data.ok) created += 1;
+    }
     setBusy(false);
-    if (!data.ok) {
-      setStatus(data.error ?? "Could not add recipe to this day.");
+    if (firstError && created === 0) {
+      setStatus(firstError);
       return;
     }
-    setStatus(`Added to ${dayLabel(day)}.`);
+    setStatus(
+      created > 1
+        ? `Added to ${dayLabel(day)} and next ${created - 1} day(s).`
+        : `Added to ${dayLabel(day)}.`
+    );
     setAddByDay((prev) => ({ ...prev, [day]: "" }));
     await refreshWeek(weekStart);
   }
 
-  async function setMealStatus(item: WeeklyItem, statusValue: "planned" | "cooked" | "skipped") {
+  async function removeMeal(item: WeeklyItem) {
     setBusy(true);
     await fetch("/api/weekly-plan", {
-      method: "PATCH",
+      method: "DELETE",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: item.id, status: statusValue }),
+      body: JSON.stringify({ id: item.id }),
     });
     setBusy(false);
     await refreshWeek(weekStart);
@@ -276,6 +299,23 @@ export function WeeklyPlannerPageClient({
 
       <section className="rounded border border-[#e0d4c7] bg-white p-4 shadow-sm">
         <h3 className="font-semibold">This week&apos;s recipe list</h3>
+        <div className="mt-2 flex items-center gap-2 text-xs text-[#7f8c8d]">
+          <span>When adding:</span>
+          <label className="inline-flex items-center gap-1">
+            span
+            <input
+              type="number"
+              min={1}
+              max={7}
+              value={spanDays}
+              onChange={(e) =>
+                setSpanDays(Math.min(7, Math.max(1, Number(e.target.value) || 1)))
+              }
+              className="w-14 rounded border border-[#d2c2af] px-1 py-0.5 text-xs"
+            />
+            day(s)
+          </label>
+        </div>
         {uniqueWeekRecipes.length === 0 ? (
           <p className="mt-1 text-sm text-[#7f8c8d]">
             No recipes assigned this week yet.
@@ -289,11 +329,11 @@ export function WeeklyPlannerPageClient({
         )}
       </section>
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
         {dayOrder.map((day) => (
           <section
             key={day}
-            className="rounded border border-[#e0d4c7] bg-white p-3 shadow-sm"
+            className="rounded border border-[#e0d4c7] bg-white p-3 shadow-sm min-h-[260px]"
           >
             <div className="mb-2">
               <p className="font-semibold text-[#5b3b2a]">{dayLabel(day)}</p>
@@ -333,30 +373,13 @@ export function WeeklyPlannerPageClient({
                     className="rounded border border-[#f0e7dc] bg-[#fffdf8] p-2"
                   >
                     <p className="text-sm font-medium">{item.recipe.title}</p>
-                    <p className="text-[11px] text-[#7f8c8d]">
-                      status: {item.status}
-                    </p>
                     <div className="mt-1 flex gap-2 text-[11px]">
                       <button
                         type="button"
-                        onClick={() => void setMealStatus(item, "planned")}
+                        onClick={() => void removeMeal(item)}
                         className="underline"
                       >
-                        Planned
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void setMealStatus(item, "cooked")}
-                        className="underline"
-                      >
-                        Cooked
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void setMealStatus(item, "skipped")}
-                        className="underline"
-                      >
-                        Skipped
+                        Remove
                       </button>
                     </div>
                   </li>

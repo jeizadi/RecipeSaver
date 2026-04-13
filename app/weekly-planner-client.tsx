@@ -368,14 +368,11 @@ export function WeeklyPlannerClient({ recipes }: Props) {
     setSuggestionsInfo("Added selected recipes to weekly tracker.");
   }
 
-  async function updateWeeklyStatus(
-    id: number,
-    patch: { status?: "planned" | "cooked" | "skipped"; rating?: number }
-  ) {
+  async function removeWeeklyItem(id: number) {
     await fetch("/api/weekly-plan", {
-      method: "PATCH",
+      method: "DELETE",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, ...patch }),
+      body: JSON.stringify({ id }),
     });
     const res = await fetch("/api/weekly-plan");
     const data = await res.json().catch(() => ({ items: [] }));
@@ -588,9 +585,7 @@ export function WeeklyPlannerClient({ recipes }: Props) {
                   <p className="font-medium">{w.recipe.title}</p>
                   <p className="text-[#7f8c8d]">{new Date(w.plannedFor).toDateString()} · {w.status}</p>
                   <div className="mt-1 flex gap-2">
-                    <button className="underline" onClick={() => updateWeeklyStatus(w.id, { status: "planned" })}>Planned</button>
-                    <button className="underline" onClick={() => updateWeeklyStatus(w.id, { status: "cooked" })}>Cooked</button>
-                    <button className="underline" onClick={() => updateWeeklyStatus(w.id, { status: "skipped" })}>Skipped</button>
+                    <button className="underline" onClick={() => removeWeeklyItem(w.id)}>Remove</button>
                   </div>
                 </li>
               ))}
