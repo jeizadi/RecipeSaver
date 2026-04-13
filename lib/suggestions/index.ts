@@ -7,6 +7,7 @@ import { getEmbeddingSimilarity } from "./embedding-provider";
 import { isBlockedDomain, passesHardDietaryFilters } from "./hard-filters";
 import { getFeedbackStats, getOrCreateProfile } from "./learn";
 import { rerankWithOptionalLlm } from "./llm-provider";
+import { discoverOpenWebCandidates } from "./open-web";
 import { attachSimilarityLanes } from "./similarity";
 import { scoreCandidate } from "./score";
 import type { SuggestionInput } from "./types";
@@ -33,12 +34,31 @@ export async function generateSuggestions(input: SuggestionInput) {
   const preferenceVector = buildLocalPreferenceVector(profile, behavior);
   await upsertUserPreferenceVector(input.userId, preferenceVector);
 
+  let candidatePool = pool;
+  if (
+    Boolean(input.includeWebCandidates) &&
+    !candidatePool.some((x) => x.isWebCandidate)
+  ) {
+    const existingUrls = new Set(
+      candidatePool
+        .map((x) => (x.sourceUrl ?? "").trim().toLowerCase())
+        .filter(Boolean)
+    );
+    const discovered = await discoverOpenWebCandidates(
+      profile,
+      behavior,
+      existingUrls,
+      42
+    );
+    candidatePool = [...candidatePool, ...discovered];
+  }
+
   const medianCreated = medianDate(
-    pool.map((x) => x.createdAt).filter((x): x is Date => Boolean(x))
+    candidatePool.map((x) => x.createdAt).filter((x): x is Date => Boolean(x))
   );
 
   const filtered = [];
-  for (const c of pool) {
+  for (const c of candidatePool) {
     if (isBlockedDomain(c, profile)) continue;
     const dietary = passesHardDietaryFilters(c, profile);
     if (!dietary.ok) continue;
@@ -130,6 +150,7 @@ export async function generateSuggestions(input: SuggestionInput) {
     })),
     totals: {
       considered: pool.length,
+      consideredWithDiscovery: candidatePool.length,
       passedFilters: filtered.length,
       returned: final.length,
       estimatedWeeklyCostCents: budgeted.estimatedWeeklyCostCents,
