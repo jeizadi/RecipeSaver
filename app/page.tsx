@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { WeeklyPlannerClient } from "./weekly-planner-client";
 import { requireUser } from "@/lib/require-user";
+import { HomeFeaturedSuggestions } from "./home-featured-suggestions";
 
 const CATEGORIES = [
   { value: "", label: "Any" },
@@ -18,8 +19,16 @@ const CATEGORIES = [
 
 export const dynamic = "force-dynamic";
 
-export default async function HomePage() {
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; ingredient?: string; category?: string }>;
+}) {
   const user = await requireUser();
+  const params = await searchParams;
+  const q = params.q?.trim() ?? "";
+  const ingredient = params.ingredient?.trim() ?? "";
+  const category = params.category?.trim() ?? "";
 
   let recipes: Awaited<ReturnType<typeof prisma.recipe.findMany>>;
   const featured = await prisma.suggestionItem.findMany({
@@ -29,10 +38,14 @@ export default async function HomePage() {
   });
 
   try {
+    const where: Record<string, unknown> = { userId: user.id };
+    if (q) where.title = { contains: q, mode: "insensitive" };
+    if (ingredient) where.ingredientsText = { contains: ingredient, mode: "insensitive" };
+    if (category) where.category = category;
     recipes = await prisma.recipe.findMany({
-      where: { userId: user.id },
+      where,
       orderBy: { createdAt: "desc" },
-      take: 40,
+      take: 80,
     });
   } catch (err) {
     console.error("HomePage DB error:", err);
@@ -45,6 +58,11 @@ export default async function HomePage() {
     );
   }
 
+  let allRecipesCount = recipes.length;
+  if (q || ingredient || category) {
+    allRecipesCount = await prisma.recipe.count({ where: { userId: user.id } });
+  }
+
   function categoryLabel(cat: string) {
     return CATEGORIES.find((c) => c.value === cat)?.label ?? cat;
   }
@@ -54,34 +72,47 @@ export default async function HomePage() {
       <section className="mb-6">
         <h2 className="mb-3 text-xl font-semibold">Recipebox Home</h2>
         <p className="rounded-lg bg-white p-4 text-sm text-[#7f8c8d] shadow-sm">
-          Search is now in its own tab. Use <Link href="/search" className="underline">Search</Link> for discovery, and use the featured suggestions below to quickly import or try new recipes.
+          Plan your week, build shopping lists, and quickly search recipes right from home.
         </p>
       </section>
+      <HomeFeaturedSuggestions
+        featured={featured.map((f) => ({
+          id: f.id,
+          title: f.title,
+          sourceDomain: f.sourceDomain,
+          recipeId: f.recipeId,
+          candidateUrl: f.candidateUrl,
+        }))}
+      />
       <section className="mb-6">
-        <h3 className="mb-2 text-lg font-semibold">Featured suggestion candidates</h3>
-        <div className="grid gap-2 sm:grid-cols-2">
-          {featured.length ? featured.map((f) => (
-            <div key={f.id} className="rounded border border-[#e0d4c7] bg-white p-3">
-              <p className="text-sm font-medium">{f.title}</p>
-              <p className="text-xs text-[#7f8c8d]">{f.sourceDomain || "unknown source"}</p>
-              <div className="mt-2 flex gap-2">
-                {f.recipeId ? (
-                  <Link href={`/recipes/${f.recipeId}`} className="text-xs underline">Open</Link>
-                ) : f.candidateUrl ? (
-                  <form action="/api/recipes/import-and-save" method="post">
-                    <input type="hidden" name="url" value={f.candidateUrl} />
-                    <button className="text-xs underline" type="submit">Import to library</button>
-                  </form>
-                ) : null}
-                {f.candidateUrl && (
-                  <a href={f.candidateUrl} target="_blank" rel="noopener noreferrer" className="text-xs underline">Source</a>
-                )}
-              </div>
-            </div>
-          )) : (
-            <p className="text-sm text-[#7f8c8d]">No suggestion run yet. Use the suggestion controls below to generate one.</p>
+        <h3 className="mb-2 text-lg font-semibold">Search recipes</h3>
+        <form method="get" className="flex flex-wrap items-end gap-3 rounded-lg bg-white p-4 shadow-sm">
+          <label className="flex flex-col gap-1">
+            <span className="text-sm font-medium">Title</span>
+            <input type="text" name="q" defaultValue={q} className="rounded border border-[#d2c2af] px-2 py-1.5 text-sm" />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-sm font-medium">Ingredient</span>
+            <input type="text" name="ingredient" defaultValue={ingredient} className="rounded border border-[#d2c2af] px-2 py-1.5 text-sm" />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-sm font-medium">Category</span>
+            <select name="category" defaultValue={category} className="rounded border border-[#d2c2af] px-2 py-1.5 text-sm">
+              {CATEGORIES.map((c) => (
+                <option key={c.value || "any"} value={c.value}>{c.label}</option>
+              ))}
+            </select>
+          </label>
+          <button type="submit" className="rounded bg-[#e67e22] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#cf711f]">Search</button>
+          {(q || ingredient || category) && (
+            <Link href="/" className="text-sm underline">Clear</Link>
           )}
-        </div>
+        </form>
+        {(q || ingredient || category) && (
+          <p className="mt-2 text-sm text-[#7f8c8d]">
+            Showing {recipes.length} matching recipes{allRecipesCount ? ` out of ${allRecipesCount}` : ""}.
+          </p>
+        )}
       </section>
 
       <section>

@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 export default function AuthPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -27,7 +29,9 @@ export default function AuthPage() {
       setStatus(data.error ?? "Auth failed.");
       return;
     }
-    router.push("/");
+    const next = searchParams.get("next");
+    const nextPath = next && next.startsWith("/") ? next : "/";
+    router.push(nextPath);
     router.refresh();
   }
 
