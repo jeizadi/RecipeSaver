@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type RecipeSummary = {
   id: number;
@@ -28,6 +28,41 @@ type SuggestionRow = {
   score: number;
   reasons: string[];
 };
+
+function weekStartPreference(): "monday" | "sunday" {
+  if (typeof window === "undefined") return "monday";
+  const v = window.localStorage.getItem("weeklyPlanner.weekStart");
+  return v === "sunday" ? "sunday" : "monday";
+}
+
+function isoDateKey(value: string): string {
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toISOString().slice(0, 10);
+}
+
+function weekBoundsFor(date: Date, startOn: "monday" | "sunday"): {
+  startKey: string;
+  endKey: string;
+} {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = startOn === "sunday" ? -day : day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  const end = new Date(d);
+  end.setDate(end.getDate() + 6);
+  const startKey = isoDateKey(d.toISOString());
+  const endKey = isoDateKey(end.toISOString());
+  return { startKey, endKey };
+}
+
+function weekPoolStorageKeyForCurrentWeek(): string {
+  const pref = weekStartPreference();
+  const { startKey } = weekBoundsFor(new Date(), pref);
+  return `weeklyPlanner.weekPool.${pref}.${startKey}`;
+}
 
 function findSauceLinks(recipes: RecipeSummary[]) {
   const urlRegex = /(https?:\/\/\S+)/g;
@@ -80,7 +115,6 @@ export function WeeklyPlannerClient({ recipes }: Props) {
   const [feedbackByKey, setFeedbackByKey] = useState<
     Record<string, "like" | "dislike" | "skip">
   >({});
-  const [plannedForDate, setPlannedForDate] = useState("");
   const [weeklyPlans, setWeeklyPlans] = useState<
     { id: number; recipeId: number; plannedFor: string; status: string; rating: number | null; recipe: { id: number; title: string } }[]
   >([]);
@@ -127,6 +161,26 @@ export function WeeklyPlannerClient({ recipes }: Props) {
       .catch(() => undefined);
   }, []);
 
+  async function refreshWeeklyPlans() {
+    const res = await fetch("/api/weekly-plan");
+    const data = await res.json().catch(() => ({ items: [] }));
+    setWeeklyPlans(data.items ?? []);
+  }
+
+  useEffect(() => {
+    // Auto-select recipes planned in today's week for shopping export.
+    const pref = weekStartPreference();
+    const { startKey, endKey } = weekBoundsFor(new Date(), pref);
+    const inWeek = weeklyPlans
+      .filter((w) => {
+        const key = isoDateKey(w.plannedFor);
+        return key >= startKey && key <= endKey;
+      })
+      .map((w) => w.recipeId);
+    const unique = Array.from(new Set(inWeek));
+    setSelectedIds(unique);
+  }, [weeklyPlans]);
+
   const sauceLinksByRecipe = useMemo(
     () => findSauceLinks(recipes),
     [recipes]
@@ -170,7 +224,7 @@ export function WeeklyPlannerClient({ recipes }: Props) {
     );
   }
 
-  async function handleGenerate() {
+  const handleGenerate = useCallback(async () => {
     if (!selectedIds.length) {
       setError("Select at least one recipe to build a shopping list.");
       return;
@@ -219,7 +273,7 @@ export function WeeklyPlannerClient({ recipes }: Props) {
     } finally {
       setLoading(false);
     }
-  }
+  }, [selectedIds, selectedSauceUrls, useAiMerge]);
 
   async function handleCopy() {
     try {
@@ -351,21 +405,17 @@ export function WeeklyPlannerClient({ recipes }: Props) {
   }
 
   async function addSelectedToWeek() {
-    if (!plannedForDate) {
-      setSuggestionsError("Choose a date first for weekly planning.");
+    if (!selectedIds.length) {
+      setSuggestionsError("Select at least one recipe first.");
       return;
     }
-    for (const id of selectedIds) {
-      await fetch("/api/weekly-plan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recipeId: id, plannedFor: plannedForDate }),
-      });
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(
+        weekPoolStorageKeyForCurrentWeek(),
+        JSON.stringify(Array.from(new Set(selectedIds)))
+      );
     }
-    const res = await fetch("/api/weekly-plan");
-    const data = await res.json().catch(() => ({ items: [] }));
-    setWeeklyPlans(data.items ?? []);
-    setSuggestionsInfo("Added selected recipes to weekly tracker.");
+    setSuggestionsInfo("Saved selected recipes to this week's list. Assign days in the weekly calendar.");
   }
 
   async function removeWeeklyItem(id: number) {
@@ -374,24 +424,68 @@ export function WeeklyPlannerClient({ recipes }: Props) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id }),
     });
-    const res = await fetch("/api/weekly-plan");
-    const data = await res.json().catch(() => ({ items: [] }));
-    setWeeklyPlans(data.items ?? []);
+    await refreshWeeklyPlans();
   }
 
   function clearPlan() {
-    setSelectedIds([]);
-    setSelectedSauceUrls([]);
-    setClipboardText("");
-    setError(null);
-    setMergeInfo(null);
-    setMergeInfoIsError(false);
+    const pref = weekStartPreference();
+    const { startKey, endKey } = weekBoundsFor(new Date(), pref);
+    const ok = window.confirm(
+      `Clear all recipes planned for this week (${startKey} to ${endKey})? This cannot be undone.`
+    );
+    if (!ok) return;
+    void (async () => {
+      await fetch("/api/weekly-plan", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ start: startKey, end: endKey }),
+      });
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem(weekPoolStorageKeyForCurrentWeek());
+      }
+      await refreshWeeklyPlans();
+      setSelectedIds([]);
+      setSelectedSauceUrls([]);
+      setClipboardText("");
+      setError(null);
+      setMergeInfo(null);
+      setMergeInfoIsError(false);
+    })();
   }
 
   const hasPlan =
     selectedIds.length > 0 ||
     selectedSauceUrls.length > 0 ||
     Boolean(clipboardText);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const key = weekPoolStorageKeyForCurrentWeek();
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        const ids = parsed
+          .map((v) => Number(v))
+          .filter((v) => Number.isInteger(v) && v > 0);
+        if (ids.length) setSelectedIds(Array.from(new Set(ids)));
+      }
+    } catch {
+      // ignore invalid local storage values
+    }
+  }, [weeklyPlans]);
+
+  useEffect(() => {
+    if (!selectedIds.length) {
+      setClipboardText("");
+      return;
+    }
+    const t = window.setTimeout(() => {
+      void handleGenerate();
+    }, 350);
+    return () => window.clearTimeout(t);
+  }, [selectedIds, selectedSauceUrls, useAiMerge, handleGenerate]);
 
   return (
     <div className="flex flex-col gap-6 lg:flex-row">
@@ -564,18 +658,12 @@ export function WeeklyPlannerClient({ recipes }: Props) {
             </a>
           </div>
           <div className="flex items-center gap-2">
-            <input
-              type="date"
-              value={plannedForDate}
-              onChange={(e) => setPlannedForDate(e.target.value)}
-              className="rounded border border-[#d2c2af] px-2 py-1 text-xs"
-            />
             <button
               type="button"
               onClick={addSelectedToWeek}
               className="rounded border border-[#d2c2af] bg-white px-2 py-1 text-xs hover:bg-[#f6efe9]"
             >
-              Add selected to week
+              Save selected for this week
             </button>
           </div>
           {weeklyPlans.length > 0 && (
