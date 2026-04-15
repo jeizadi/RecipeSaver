@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
 type FeaturedSuggestion = {
@@ -17,10 +17,16 @@ export function HomeFeaturedSuggestions({
   featured: FeaturedSuggestion[];
 }) {
   const storageKey = "home.featuredSuggestions.open";
-  const [open, setOpen] = useState(() => {
-    if (typeof window === "undefined") return true;
-    return window.localStorage.getItem(storageKey) !== "0";
-  });
+  const [open, setOpen] = useState(true);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const timer = window.setTimeout(() => {
+      const stored = window.localStorage.getItem(storageKey);
+      if (stored === "0") setOpen(false);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   function toggleOpen() {
     setOpen((prev) => {
