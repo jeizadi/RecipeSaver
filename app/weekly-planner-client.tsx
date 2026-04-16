@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { parseBaseServings } from "@/lib/ingredient-scale";
 
 type RecipeSummary = {
   id: number;
@@ -9,6 +10,7 @@ type RecipeSummary = {
   tags: string;
   description: string;
   ingredientsText: string;
+  servings: string;
 };
 
 type Props = {
@@ -50,6 +52,12 @@ function weekPoolStorageKeyForCurrentWeek(): string {
   return `weeklyPlanner.weekPool.${pref}.${startKey}`;
 }
 
+function weekServingsOverridesStorageKeyForCurrentWeek(): string {
+  const pref = weekStartPreference();
+  const { startKey } = weekBoundsFor(new Date(), pref);
+  return `weeklyPlanner.servingsOverrides.${pref}.${startKey}`;
+}
+
 function findSauceLinks(recipes: RecipeSummary[]) {
   const urlRegex = /(https?:\/\/\S+)/g;
   const byRecipe: Record<
@@ -85,8 +93,18 @@ export function WeeklyPlannerClient({ recipes }: Props) {
   const [mergeInfoIsError, setMergeInfoIsError] = useState(false);
   const [suggestionsInfo, setSuggestionsInfo] = useState<string | null>(null);
   const [savedWeekRecipeIds, setSavedWeekRecipeIds] = useState<number[]>([]);
+  const [servingsOverrideByRecipe, setServingsOverrideByRecipe] = useState<
+    Record<number, string>
+  >({});
   const [weeklyPlans, setWeeklyPlans] = useState<
-    { id: number; recipeId: number; plannedFor: string; status: string; rating: number | null; recipe: { id: number; title: string } }[]
+    {
+      id: number;
+      recipeId: number;
+      plannedFor: string;
+      status: string;
+      rating: number | null;
+      recipe: { id: number; title: string };
+    }[]
   >([]);
 
   useEffect(() => {
@@ -95,6 +113,32 @@ export function WeeklyPlannerClient({ recipes }: Props) {
       .then((d) => setWeeklyPlans(d.items ?? []))
       .catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const key = weekServingsOverridesStorageKeyForCurrentWeek();
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      if (!parsed || typeof parsed !== "object") return;
+      const next: Record<number, string> = {};
+      for (const [k, v] of Object.entries(parsed)) {
+        const id = Number(k);
+        if (!Number.isInteger(id) || id < 1) continue;
+        if (typeof v === "string") next[id] = v;
+      }
+      setServingsOverrideByRecipe(next);
+    } catch {
+      // ignore malformed local state
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const key = weekServingsOverridesStorageKeyForCurrentWeek();
+    window.localStorage.setItem(key, JSON.stringify(servingsOverrideByRecipe));
+  }, [servingsOverrideByRecipe]);
 
   async function refreshWeeklyPlans() {
     const res = await fetch("/api/weekly-plan");
@@ -124,6 +168,18 @@ export function WeeklyPlannerClient({ recipes }: Props) {
     }
     return links;
   }, [selectedRecipes, sauceLinksByRecipe]);
+
+  const plannedServingsByRecipe = useMemo(() => {
+    const out: Record<number, number> = {};
+    for (const recipe of selectedRecipes) {
+      const base = parseBaseServings(recipe.servings);
+      const raw = servingsOverrideByRecipe[recipe.id];
+      const target = Number(raw);
+      if (!base || !Number.isInteger(target) || target < 1) continue;
+      out[recipe.id] = target;
+    }
+    return out;
+  }, [selectedRecipes, servingsOverrideByRecipe]);
 
   function toggleRecipe(id: number) {
     setClipboardText("");
@@ -162,6 +218,7 @@ export function WeeklyPlannerClient({ recipes }: Props) {
           recipeIds: selectedIds,
           sauceUrls: selectedSauceUrls,
           useAiMerge,
+          plannedServingsByRecipe,
         }),
       });
       const data = await res.json();
@@ -194,7 +251,7 @@ export function WeeklyPlannerClient({ recipes }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [selectedIds, selectedSauceUrls, useAiMerge]);
+  }, [selectedIds, selectedSauceUrls, useAiMerge, plannedServingsByRecipe]);
 
   async function handleCopy() {
     try {
@@ -206,7 +263,7 @@ export function WeeklyPlannerClient({ recipes }: Props) {
 
   async function addSelectedToWeek() {
     if (!selectedIds.length) {
-      setSuggestionsError("Select at least one recipe first.");
+      setError("Select at least one recipe first.");
       return;
     }
     if (typeof window !== "undefined") {
@@ -244,8 +301,10 @@ export function WeeklyPlannerClient({ recipes }: Props) {
       });
       if (typeof window !== "undefined") {
         window.localStorage.removeItem(weekPoolStorageKeyForCurrentWeek());
+        window.localStorage.removeItem(weekServingsOverridesStorageKeyForCurrentWeek());
       }
       setSavedWeekRecipeIds([]);
+      setServingsOverrideByRecipe({});
       await refreshWeeklyPlans();
       setSelectedIds([]);
       setSelectedSauceUrls([]);
@@ -349,6 +408,42 @@ export function WeeklyPlannerClient({ recipes }: Props) {
           <p className="mb-3 text-sm text-[#7f8c8d]">
             Select recipes using the &quot;Plan&quot; checkbox.
           </p>
+        )}
+        {selectedRecipes.length > 0 && (
+          <div className="mb-3 rounded border border-[#e0d4c7] bg-[#fffdf8] p-2">
+            <p className="mb-1 text-xs font-medium">
+              Scale servings for shopping list (optional)
+            </p>
+            <div className="space-y-1">
+              {selectedRecipes.map((r) => {
+                const base = parseBaseServings(r.servings);
+                if (!base) return null;
+                return (
+                  <label
+                    key={`serving-${r.id}`}
+                    className="flex items-center justify-between gap-2 text-xs"
+                  >
+                    <span className="truncate">
+                      {r.title} (base {base})
+                    </span>
+                    <input
+                      type="number"
+                      min={1}
+                      placeholder={String(base)}
+                      value={servingsOverrideByRecipe[r.id] ?? ""}
+                      onChange={(e) =>
+                        setServingsOverrideByRecipe((prev) => ({
+                          ...prev,
+                          [r.id]: e.target.value,
+                        }))
+                      }
+                      className="w-16 rounded border border-[#d2c2af] px-2 py-1 text-xs"
+                    />
+                  </label>
+                );
+              })}
+            </div>
+          </div>
         )}
 
         {allSauceLinks.length > 0 && (

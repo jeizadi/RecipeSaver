@@ -5,6 +5,7 @@ import {
   formatAggregatedForClipboard,
 } from "@/lib/ingredients";
 import { importRecipeFromUrl } from "@/lib/import-recipe";
+import { parseBaseServings, scaleIngredientsText } from "@/lib/ingredient-scale";
 import { refineAggregatedItemsWithLlm } from "@/lib/shopping-list-llm";
 import { getCurrentUserFromRequest } from "@/lib/auth";
 
@@ -13,6 +14,7 @@ type RequestBody = {
   sauceUrls?: string[];
   /** When true and GEMINI_API_KEY or OPENAI_API_KEY is set, run an optional LLM merge pass */
   useAiMerge?: boolean;
+  plannedServingsByRecipe?: Record<string, number>;
 };
 
 export async function POST(request: NextRequest) {
@@ -47,6 +49,7 @@ export async function POST(request: NextRequest) {
           )
         )
       : [];
+  const plannedServingsByRecipe = body.plannedServingsByRecipe ?? {};
 
   if (!recipeIds.length && !sauceUrls.length) {
     return NextResponse.json(
@@ -69,15 +72,25 @@ export async function POST(request: NextRequest) {
           id: true,
           title: true,
           ingredientsText: true,
+          servings: true,
         },
       });
 
       for (const r of recipes) {
         if (!r.ingredientsText.trim()) continue;
+        const targetServings = Number((plannedServingsByRecipe as Record<string, unknown>)[String(r.id)]);
+        const baseServings = parseBaseServings(r.servings);
+        const scaleFactor =
+          baseServings && Number.isFinite(targetServings) && targetServings > 0
+            ? targetServings / baseServings
+            : 1;
         sources.push({
           recipeId: r.id,
           title: r.title,
-          ingredientsText: r.ingredientsText,
+          ingredientsText:
+            scaleFactor === 1
+              ? r.ingredientsText
+              : scaleIngredientsText(r.ingredientsText, scaleFactor),
         });
       }
     }

@@ -126,6 +126,7 @@ export default async function HomePage({
                 tags: r.tags,
                 description: r.description,
                 ingredientsText: r.ingredientsText,
+                servings: r.servings,
               }))}
             />
           </>

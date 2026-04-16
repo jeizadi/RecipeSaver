@@ -401,6 +401,7 @@ export function WeeklyPlannerPageClient({
             />
             day(s)
           </label>
+          <span>You can add multiple recipes to the same day.</span>
         </div>
         {weekPoolRecipes.length === 0 ? (
           <p className="mt-1 text-sm text-[#7f8c8d]">
@@ -455,7 +456,7 @@ export function WeeklyPlannerPageClient({
                 disabled={busy}
                 className="rounded bg-[#e67e22] px-2 py-1 text-xs font-medium text-white hover:bg-[#cf711f] disabled:opacity-60"
               >
-                Add
+                Add recipe
               </button>
             </div>
             {byDay[day].length === 0 ? (

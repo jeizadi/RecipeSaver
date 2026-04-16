@@ -52,7 +52,10 @@ export default async function RecipePage({
         </p>
       </header>
 
-      <IngredientsCopyReadOnly text={recipe.ingredientsText} />
+      <IngredientsCopyReadOnly
+        text={recipe.ingredientsText}
+        servings={recipe.servings}
+      />
 
       {recipe.instructionsText && (
         <section className="mb-6">
