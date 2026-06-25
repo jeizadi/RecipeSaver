@@ -83,6 +83,7 @@ model AppUser {
   createdAt     DateTime       @default(now()) @map("created_at")
   updatedAt     DateTime       @updatedAt @map("updated_at")
   sessions      UserSession[]
+  passwordResetTokens PasswordResetToken[]
   recipes       Recipe[]
   profile       UserProfile?
   weeklyMeals   WeeklyMealPlan[]
@@ -102,6 +103,18 @@ model UserSession {
 
   @@index([userId, expiresAt])
   @@map("user_sessions")
+}
+
+model PasswordResetToken {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique
+  userId    Int      @map("user_id")
+  user      AppUser  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, expiresAt])
+  @@map("password_reset_tokens")
 }
 
 enum WeeklyMealStatus {

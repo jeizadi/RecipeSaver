@@ -13,7 +13,10 @@ export function middleware(request: NextRequest) {
     pathname.startsWith("/sitemap");
   if (isPublicAsset) return NextResponse.next();
 
-  const isAuthRoute = pathname === "/auth" || pathname.startsWith("/api/auth");
+  const isAuthRoute =
+    pathname === "/auth" ||
+    pathname.startsWith("/auth/") ||
+    pathname.startsWith("/api/auth");
   if (isAuthRoute) return NextResponse.next();
 
   const hasSession = Boolean(request.cookies.get(SESSION_COOKIE)?.value);

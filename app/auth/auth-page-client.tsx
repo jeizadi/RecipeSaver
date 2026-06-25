@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -53,6 +54,11 @@ export default function AuthPageClient() {
         >
           {mode === "login" ? "Need an account? Sign up" : "Already have an account? Login"}
         </button>
+        {mode === "login" && (
+          <Link href="/auth/forgot" className="block text-center text-xs underline">
+            Forgot password?
+          </Link>
+        )}
         {status && <p className="text-sm text-[#c0392b]">{status}</p>}
         <p className="text-xs text-[#7f8c8d]">
           If account creation fails after updates, run{" "}
