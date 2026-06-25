@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { buildBehaviorStats, storeBehaviorStats } from "@/lib/suggestions/behavior";
 import { normalizeDomain } from "@/lib/suggestions/feature-extract";
-import { getCurrentUserFromRequest } from "@/lib/auth";
+import { getRequestUser, recipeReadFilter } from "@/lib/access";
 
 const VALID_SIGNALS = new Set([
   "like",
@@ -15,7 +15,7 @@ const VALID_SIGNALS = new Set([
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getCurrentUserFromRequest(request);
+    const user = await getRequestUser(request);
     if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     const body = await request.json();
     const signal = typeof body.signal === "string" ? body.signal : "";
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
       recipeId != null
         ? (
             await prisma.recipe.findFirst({
-              where: { id: recipeId, userId: user.id },
+              where: { id: recipeId, ...recipeReadFilter(user) },
               select: { id: true },
             })
           )?.id ?? null

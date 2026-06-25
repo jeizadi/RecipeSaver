@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUserFromRequest } from "@/lib/auth";
+import { getRequestUser, recipeOwnerId, recipeReadFilter } from "@/lib/access";
 
 const CATEGORIES = [
   "breakfast",
@@ -16,7 +16,7 @@ const CATEGORIES = [
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await getCurrentUserFromRequest(request);
+    const user = await getRequestUser(request);
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
     const pageSize = 20;
 
-    const where: Record<string, unknown> = { userId: user.id };
+    const where: Record<string, unknown> = { ...recipeReadFilter(user) };
     if (q) where.title = { contains: q, mode: "insensitive" };
     if (ingredient)
       where.ingredientsText = { contains: ingredient, mode: "insensitive" };
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getCurrentUserFromRequest(request);
+    const user = await getRequestUser(request);
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
         author: (author ?? "").toString().trim(),
         category: cat,
         tags: (tags ?? "").toString().trim(),
-        userId: user.id,
+        userId: recipeOwnerId(user),
       },
     });
 

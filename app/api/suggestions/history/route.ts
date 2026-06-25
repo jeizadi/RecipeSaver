@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUserFromRequest } from "@/lib/auth";
+import { getRequestUser } from "@/lib/access";
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await getCurrentUserFromRequest(request);
+    const user = await getRequestUser(request);
     if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     const url = new URL(request.url);
     const limit = Math.min(

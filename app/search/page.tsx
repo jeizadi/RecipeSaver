@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { recipeReadFilter } from "@/lib/access";
 import { requireUser } from "@/lib/require-user";
 
 const CATEGORIES = [
@@ -27,7 +28,7 @@ export default async function SearchPage({
   const q = params.q?.trim() ?? "";
   const ingredient = params.ingredient?.trim() ?? "";
   const category = params.category?.trim() ?? "";
-  const where: Record<string, unknown> = { userId: user.id };
+  const where: Record<string, unknown> = { ...recipeReadFilter(user) };
   if (q) where.title = { contains: q, mode: "insensitive" };
   if (ingredient) where.ingredientsText = { contains: ingredient, mode: "insensitive" };
   if (category) where.category = category;

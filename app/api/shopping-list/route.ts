@@ -7,7 +7,7 @@ import {
 import { importRecipeFromUrl } from "@/lib/import-recipe";
 import { parseBaseServings, scaleIngredientsText } from "@/lib/ingredient-scale";
 import { refineAggregatedItemsWithLlm } from "@/lib/shopping-list-llm";
-import { getCurrentUserFromRequest } from "@/lib/auth";
+import { getRequestUser, recipeReadFilter } from "@/lib/access";
 
 type RequestBody = {
   recipeIds?: number[];
@@ -18,7 +18,7 @@ type RequestBody = {
 };
 
 export async function POST(request: NextRequest) {
-  const user = await getCurrentUserFromRequest(request);
+  const user = await getRequestUser(request);
   if (!user) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
 
     if (recipeIds.length) {
       const recipes = await prisma.recipe.findMany({
-        where: { id: { in: recipeIds }, userId: user.id },
+        where: { id: { in: recipeIds }, ...recipeReadFilter(user) },
         select: {
           id: true,
           title: true,

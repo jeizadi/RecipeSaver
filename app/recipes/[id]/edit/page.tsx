@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { RecipeForm } from "../../recipe-form";
+import { recipeReadFilter } from "@/lib/access";
 import { requireUser } from "@/lib/require-user";
 
 export default async function EditRecipePage({
@@ -11,7 +12,7 @@ export default async function EditRecipePage({
   const user = await requireUser();
   const id = parseInt((await params).id, 10);
   if (!Number.isFinite(id)) notFound();
-  const recipe = await prisma.recipe.findFirst({ where: { id, userId: user.id } });
+  const recipe = await prisma.recipe.findFirst({ where: { id, ...recipeReadFilter(user) } });
   if (!recipe) notFound();
 
   return (

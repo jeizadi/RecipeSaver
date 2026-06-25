@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { WeeklyPlannerClient } from "./weekly-planner-client";
+import { AUTH_ENABLED } from "@/lib/auth-config";
+import { recipeReadFilter } from "@/lib/access";
 import { requireUser } from "@/lib/require-user";
 import { HomeFeaturedSuggestions } from "./home-featured-suggestions";
 
@@ -32,13 +34,15 @@ export default async function HomePage({
 
   let recipes: Awaited<ReturnType<typeof prisma.recipe.findMany>>;
   const featured = await prisma.suggestionItem.findMany({
-    where: { run: { profile: { userId: user.id } } },
+    where: AUTH_ENABLED
+      ? { run: { profile: { userId: user.id } } }
+      : { run: { profile: { name: "default" } } },
     orderBy: [{ run: { createdAt: "desc" } }, { score: "desc" }],
     take: 8,
   });
 
   try {
-    const where: Record<string, unknown> = { userId: user.id };
+    const where: Record<string, unknown> = { ...recipeReadFilter(user) };
     if (q) where.title = { contains: q, mode: "insensitive" };
     if (ingredient) where.ingredientsText = { contains: ingredient, mode: "insensitive" };
     if (category) where.category = category;
@@ -60,7 +64,7 @@ export default async function HomePage({
 
   let allRecipesCount = recipes.length;
   if (q || ingredient || category) {
-    allRecipesCount = await prisma.recipe.count({ where: { userId: user.id } });
+    allRecipesCount = await prisma.recipe.count({ where: recipeReadFilter(user) });
   }
 
   function categoryLabel(cat: string) {

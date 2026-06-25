@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { importRecipeFromUrl } from "@/lib/import-recipe";
-import { getCurrentUserFromRequest } from "@/lib/auth";
+import { getRequestUser, recipeOwnerId } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(request: NextRequest) {
-  const user = await getCurrentUserFromRequest(request);
-  if (!user) return NextResponse.redirect(new URL("/auth", request.url));
+  const user = await getRequestUser(request);
+  if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 
   const form = await request.formData().catch(() => null);
   const url =
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     const imported = await importRecipeFromUrl(url);
     const recipe = await prisma.recipe.create({
       data: {
-        userId: user.id,
+        userId: recipeOwnerId(user),
         title: imported.title || "Imported recipe",
         sourceUrl: url,
         description: "",

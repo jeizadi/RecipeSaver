@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateSuggestions } from "@/lib/suggestions";
-import { getCurrentUserFromRequest } from "@/lib/auth";
+import { getRequestUser } from "@/lib/access";
 import { Prisma } from "@prisma/client";
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getCurrentUserFromRequest(request);
+    const user = await getRequestUser(request);
     if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     const body = await request.json().catch(() => ({}));
     const result = await generateSuggestions({

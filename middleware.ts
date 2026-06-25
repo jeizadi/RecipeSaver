@@ -2,8 +2,11 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 const SESSION_COOKIE = "rs_session";
+const AUTH_ENABLED = process.env.AUTH_ENABLED === "true";
 
 export function middleware(request: NextRequest) {
+  if (!AUTH_ENABLED) return NextResponse.next();
+
   const { pathname, search } = request.nextUrl;
 
   const isPublicAsset =

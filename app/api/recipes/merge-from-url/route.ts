@@ -5,10 +5,10 @@ import {
 } from "@/lib/import-recipe";
 import { appendMergedRecipeBlocks } from "@/lib/merge-recipe-text";
 import { normalizeUrlForMatch } from "@/lib/recipe-link-heuristics";
-import { getCurrentUserFromRequest } from "@/lib/auth";
+import { getRequestUser, recipeReadFilter } from "@/lib/access";
 
 export async function POST(request: NextRequest) {
-  const user = await getCurrentUserFromRequest(request);
+  const user = await getRequestUser(request);
   if (!user) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, {
       status: 401,

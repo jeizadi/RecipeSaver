@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUserFromRequest } from "@/lib/auth";
+import { getRequestUser, recipeReadFilter } from "@/lib/access";
 import {
   collectUrlsFromIngredientsText,
   extractSamePageWprmRecipeSiblings,
@@ -65,7 +65,7 @@ function pickBestSourceUrlMatch(
 }
 
 export async function POST(request: NextRequest) {
-  const user = await getCurrentUserFromRequest(request);
+  const user = await getRequestUser(request);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   let body: {
     ingredientsText?: unknown;
@@ -157,8 +157,8 @@ export async function POST(request: NextRequest) {
   const allRecipes = await prisma.recipe.findMany({
     where:
       excludeId != null
-        ? { userId: user.id, id: { not: excludeId } }
-        : { userId: user.id },
+        ? { ...recipeReadFilter(user), id: { not: excludeId } }
+        : recipeReadFilter(user),
     select: { id: true, title: true, sourceUrl: true },
   });
 

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
+import { AUTH_ENABLED } from "@/lib/auth-config";
 import { AuthControls } from "./auth/auth-controls";
 import "./globals.css";
 
@@ -81,7 +82,7 @@ export default function RootLayout({
               >
                 Add Recipe
               </Link>
-              <AuthControls />
+              {AUTH_ENABLED && <AuthControls />}
             </nav>
           </div>
         </header>

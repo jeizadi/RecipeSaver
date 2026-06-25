@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { recipeReadFilter } from "@/lib/access";
 import { requireUser } from "@/lib/require-user";
 import { IngredientsCopyReadOnly } from "../ingredients-with-copy";
 
@@ -25,7 +26,7 @@ export default async function RecipePage({
   const id = parseInt((await params).id, 10);
   if (!Number.isFinite(id)) notFound();
 
-  const recipe = await prisma.recipe.findFirst({ where: { id, userId: user.id } });
+  const recipe = await prisma.recipe.findFirst({ where: { id, ...recipeReadFilter(user) } });
   if (!recipe) notFound();
 
   const categoryLabel = CATEGORIES[recipe.category] ?? recipe.category;

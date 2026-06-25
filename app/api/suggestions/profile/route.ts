@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getOrCreateProfile, updateProfile } from "@/lib/suggestions/learn";
-import { getCurrentUserFromRequest } from "@/lib/auth";
+import { getRequestUser } from "@/lib/access";
 
 function parseList(x: unknown): string[] | undefined {
   if (!Array.isArray(x)) return undefined;
@@ -12,7 +12,7 @@ function parseList(x: unknown): string[] | undefined {
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await getCurrentUserFromRequest(request);
+    const user = await getRequestUser(request);
     if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     const profileName =
       new URL(request.url).searchParams.get("profileName")?.trim() || "default";
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getCurrentUserFromRequest(request);
+    const user = await getRequestUser(request);
     if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     const body = await request.json();
     const profileName =

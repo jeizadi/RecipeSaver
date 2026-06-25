@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUserFromRequest } from "@/lib/auth";
+import {
+  getRequestUser,
+  recipeReadFilter,
+  weeklyPlanOwnerId,
+  weeklyPlanReadFilter,
+} from "@/lib/access";
 import { buildBehaviorStats, storeBehaviorStats } from "@/lib/suggestions/behavior";
 
 export async function GET(request: NextRequest) {
-  const user = await getCurrentUserFromRequest(request);
+  const user = await getRequestUser(request);
   if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   const url = new URL(request.url);
   const start = url.searchParams.get("start");
@@ -19,13 +24,13 @@ export async function GET(request: NextRequest) {
   const rows = await prisma.weeklyMealPlan.findMany({
     where: hasRange
       ? {
-          userId: user.id,
+          ...weeklyPlanReadFilter(user),
           plannedFor: {
             gte: parsedStart!,
             lte: parsedEnd!,
           },
         }
-      : { userId: user.id },
+      : weeklyPlanReadFilter(user),
     orderBy: { plannedFor: "asc" },
     take: hasRange ? 200 : 50,
     include: { recipe: { select: { id: true, title: true } } },
@@ -34,7 +39,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const user = await getCurrentUserFromRequest(request);
+  const user = await getRequestUser(request);
   if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   const body = await request.json().catch(() => ({}));
   const recipeId = Number(body.recipeId);
@@ -46,11 +51,11 @@ export async function POST(request: NextRequest) {
   if (!Number.isInteger(recipeId) || Number.isNaN(plannedFor.getTime())) {
     return NextResponse.json({ ok: false, error: "recipeId and plannedFor are required." }, { status: 400 });
   }
-  const recipe = await prisma.recipe.findFirst({ where: { id: recipeId, userId: user.id } });
+  const recipe = await prisma.recipe.findFirst({ where: { id: recipeId, ...recipeReadFilter(user) } });
   if (!recipe) return NextResponse.json({ ok: false, error: "Recipe not found." }, { status: 404 });
   const item = await prisma.weeklyMealPlan.create({
     data: {
-      userId: user.id,
+      userId: weeklyPlanOwnerId(user),
       recipeId,
       plannedFor,
       notes: typeof body.notes === "string" ? body.notes : "",
@@ -60,7 +65,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const user = await getCurrentUserFromRequest(request);
+  const user = await getRequestUser(request);
   if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   const body = await request.json().catch(() => ({}));
   const start = typeof body.start === "string" ? body.start : "";
@@ -76,7 +81,7 @@ export async function DELETE(request: NextRequest) {
     );
     await prisma.weeklyMealPlan.deleteMany({
       where: {
-        userId: user.id,
+        ...weeklyPlanReadFilter(user),
         plannedFor: { gte: startDate, lte: endDate },
       },
     });
@@ -88,7 +93,7 @@ export async function DELETE(request: NextRequest) {
   if (!Number.isInteger(id)) {
     return NextResponse.json({ ok: false, error: "id required" }, { status: 400 });
   }
-  const existing = await prisma.weeklyMealPlan.findFirst({ where: { id, userId: user.id } });
+  const existing = await prisma.weeklyMealPlan.findFirst({ where: { id, ...weeklyPlanReadFilter(user) } });
   if (!existing) return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
   await prisma.weeklyMealPlan.delete({ where: { id } });
   const behavior = await buildBehaviorStats(user.id);
@@ -97,12 +102,12 @@ export async function DELETE(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const user = await getCurrentUserFromRequest(request);
+  const user = await getRequestUser(request);
   if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   const body = await request.json().catch(() => ({}));
   const id = Number(body.id);
   if (!Number.isInteger(id)) return NextResponse.json({ ok: false, error: "id required" }, { status: 400 });
-  const existing = await prisma.weeklyMealPlan.findFirst({ where: { id, userId: user.id } });
+  const existing = await prisma.weeklyMealPlan.findFirst({ where: { id, ...weeklyPlanReadFilter(user) } });
   if (!existing) return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
   const plannedForRaw = typeof body.plannedFor === "string" ? body.plannedFor : "";
   const mp = plannedForRaw.match(/^(\d{4})-(\d{2})-(\d{2})$/);

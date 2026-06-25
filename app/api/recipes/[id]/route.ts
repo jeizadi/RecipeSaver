@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUserFromRequest } from "@/lib/auth";
+import { getRequestUser, recipeReadFilter } from "@/lib/access";
 
 const CATEGORIES = [
   "breakfast",
@@ -20,17 +20,17 @@ function parseId(id: string): number | null {
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = await getCurrentUserFromRequest(_request);
+  const user = await getRequestUser(request);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const id = parseId((await params).id);
   if (id == null) {
     return NextResponse.json({ error: "Invalid id" }, { status: 400 });
   }
   try {
-    const recipe = await prisma.recipe.findFirst({ where: { id, userId: user.id } });
+    const recipe = await prisma.recipe.findFirst({ where: { id, ...recipeReadFilter(user) } });
     if (!recipe) {
       return NextResponse.json({ error: "Recipe not found" }, { status: 404 });
     }
@@ -48,7 +48,7 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = await getCurrentUserFromRequest(request);
+  const user = await getRequestUser(request);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const id = parseId((await params).id);
   if (id == null) {
@@ -102,7 +102,7 @@ export async function PATCH(
     }
     if (tags !== undefined) data.tags = String(tags).trim();
 
-    const recipe = await prisma.recipe.findFirst({ where: { id, userId: user.id } });
+    const recipe = await prisma.recipe.findFirst({ where: { id, ...recipeReadFilter(user) } });
     if (!recipe) return NextResponse.json({ error: "Recipe not found" }, { status: 404 });
     const updated = await prisma.recipe.update({
       where: { id },
@@ -122,17 +122,17 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = await getCurrentUserFromRequest(_request);
+  const user = await getRequestUser(request);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const id = parseId((await params).id);
   if (id == null) {
     return NextResponse.json({ error: "Invalid id" }, { status: 400 });
   }
   try {
-    const recipe = await prisma.recipe.findFirst({ where: { id, userId: user.id } });
+    const recipe = await prisma.recipe.findFirst({ where: { id, ...recipeReadFilter(user) } });
     if (!recipe) return NextResponse.json({ error: "Recipe not found" }, { status: 404 });
     await prisma.recipe.delete({ where: { id } });
     return new NextResponse(null, { status: 204 });
