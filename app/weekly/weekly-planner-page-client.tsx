@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -101,6 +102,7 @@ export function WeeklyPlannerPageClient({
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
   const [quickRecipe, setQuickRecipe] = useState("");
+  const [quickQuery, setQuickQuery] = useState("");
   const [quickDay, setQuickDay] = useState<DayKey>("monday");
   const dayOrder = useMemo(
     () => orderedDays(weekStartPreference),
@@ -169,6 +171,16 @@ export function WeeklyPlannerPageClient({
     return out;
   }, [items, weekDates, dayOrder]);
 
+  const quickMatches = useMemo(() => {
+    const query = quickQuery.trim().toLowerCase();
+    if (!query) return [];
+    return recipes
+      .filter((recipe) => recipe.title.toLowerCase().includes(query))
+      .slice(0, 6);
+  }, [quickQuery, recipes]);
+
+  const quickLooksLikeUrl = /^https?:\/\//i.test(quickQuery.trim());
+
   async function addRecipe(day: DayKey, recipeId: number) {
     const selected = recipeId;
     if (!Number.isInteger(selected) || selected < 1) {
@@ -215,6 +227,7 @@ export function WeeklyPlannerPageClient({
     }
     await addRecipe(quickDay, selected);
     setQuickRecipe("");
+    setQuickQuery("");
   }
 
   async function removeMeal(item: WeeklyItem) {
@@ -277,14 +290,48 @@ export function WeeklyPlannerPageClient({
             </label>
           </div>
           <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_10rem_auto]">
-            <select
-              value={quickRecipe}
-              onChange={(e) => setQuickRecipe(e.target.value)}
-              className="min-h-10 min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
-            >
-              <option value="">Choose a recipe…</option>
-              {recipes.map((r) => <option key={r.id} value={r.id}>{r.title}</option>)}
-            </select>
+            <div className="relative min-w-0">
+              <input
+                type="search"
+                value={quickQuery}
+                onChange={(e) => {
+                  setQuickQuery(e.target.value);
+                  setQuickRecipe("");
+                }}
+                placeholder="Search recipes or paste a URL…"
+                className="min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+                aria-label="Search recipes or paste a recipe URL"
+              />
+              {quickQuery.trim() && !quickRecipe && (
+                <div className="absolute left-0 right-0 top-12 z-10 rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+                  {quickMatches.length > 0 ? (
+                    quickMatches.map((recipe) => (
+                      <button
+                        key={recipe.id}
+                        type="button"
+                        onClick={() => {
+                          setQuickRecipe(String(recipe.id));
+                          setQuickQuery(recipe.title);
+                        }}
+                        className="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-[#fff7e8]"
+                      >
+                        {recipe.title}
+                      </button>
+                    ))
+                  ) : (
+                    <div className="px-3 py-2 text-sm text-slate-500">
+                      <p>{quickLooksLikeUrl ? "No saved recipe uses this link." : "No saved recipes match."}</p>
+                      <Link
+                        href={`/recipes/new?${quickLooksLikeUrl ? "sourceUrl" : "title"}=${encodeURIComponent(quickQuery.trim())}`}
+                        className="mt-1 inline-block font-medium text-[#b66a00] hover:underline"
+                      >
+                        Add a new recipe
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
             <select
               value={quickDay}
               onChange={(e) => setQuickDay(e.target.value as DayKey)}
