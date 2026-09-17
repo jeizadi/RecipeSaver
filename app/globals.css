@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  --background: #fffaf0;
+  --foreground: #172033;
   color-scheme: light;
 }
 
@@ -22,8 +22,7 @@ body {
 /* Keep controls readable even when OS/browser is in dark mode. */
 input,
 select,
-textarea,
-button {
+textarea {
   color: #171717;
 }
 
@@ -31,8 +30,8 @@ button {
 html,
 body {
   color-scheme: light !important;
-  background: #f8fafc !important;
-  color: #0f172a !important;
+  background: #fffaf0 !important;
+  color: #172033 !important;
 }
 
 a {

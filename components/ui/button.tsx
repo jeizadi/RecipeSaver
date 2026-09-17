@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 type ButtonVariant = "primary" | "secondary" | "ghost" | "quiet";
 
 const variants: Record<ButtonVariant, string> = {
-  primary: "bg-[#e9a227] text-[#fffaf0] shadow-sm hover:bg-[#d99016]",
+  primary: "bg-[#f4a51c] text-[#4a2b00] shadow-sm hover:bg-[#e39a0f]",
   secondary: "border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50",
   ghost: "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
   quiet: "text-slate-400 hover:text-slate-700",

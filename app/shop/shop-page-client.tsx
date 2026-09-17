@@ -196,7 +196,7 @@ export function ShopPageClient() {
           </div>
           <div className="flex gap-2">
             <Button type="button" variant="ghost" onClick={() => void regenerate()} disabled={busy}>Refresh</Button>
-            <Link href="/weekly" className="inline-flex min-h-10 items-center rounded-xl px-3 py-2 text-sm font-medium text-[#a15d00] hover:bg-[#fff4d6]">Plan meals</Link>
+            <Link href="/weekly" className="inline-flex min-h-10 items-center rounded-xl bg-[#fff0c7] px-3 py-2 text-sm font-medium text-[#8a5200] hover:bg-[#ffe6a3]">Plan meals</Link>
           </div>
         </div>
         <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-slate-100">

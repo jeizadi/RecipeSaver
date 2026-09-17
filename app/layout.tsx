@@ -21,8 +21,8 @@ export default function RootLayout({
         <meta name="supported-color-schemes" content="light" />
         <meta name="darkreader-lock" />
       </head>
-      <body className="min-h-screen bg-slate-50 text-slate-950 antialiased">
-        <header className="sticky top-0 z-10 border-b border-slate-200/80 bg-white/95 backdrop-blur">
+      <body className="min-h-screen bg-[#fffaf0] text-slate-950 antialiased">
+        <header className="sticky top-0 z-10 border-b border-[#eadfca] bg-[#fffaf0]/95 backdrop-blur">
           <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
             <h1 className="text-lg font-semibold tracking-tight">
               <Link href="/shop" className="hover:underline">
@@ -40,7 +40,7 @@ export default function RootLayout({
               </Link>
               <Link
                 href="/shop"
-                className="rounded-lg px-3 py-2 font-medium text-slate-700 hover:bg-slate-100"
+                className="rounded-lg bg-[#fff0c7] px-3 py-2 font-medium text-[#8a5200] hover:bg-[#ffe6a3]"
               >
                 Shop
               </Link>
@@ -70,7 +70,7 @@ export default function RootLayout({
               </Link>
               <Link
                 href="/recipes/new"
-                className="hidden rounded-lg bg-slate-900 px-3 py-2 font-medium text-white hover:bg-slate-700 sm:inline-flex"
+                className="hidden rounded-lg bg-[#f4a51c] px-3 py-2 font-medium text-[#4a2b00] hover:bg-[#e39a0f] sm:inline-flex"
               >
                 Add Recipe
               </Link>
