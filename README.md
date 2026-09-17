@@ -21,13 +21,18 @@ Create a free PostgreSQL database:
 
 ```bash
 cp .env.example .env
-# Edit .env and set DATABASE_URL to your Postgres connection string (with ?sslmode=require for Neon).
+# The default .env values target the local Docker database below.
+npm run db:up
 
-npx prisma migrate dev   # create tables
+npm run db:migrate       # apply the checked-in migrations
 npm run dev              # start Next.js
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
+
+The local database runs on port `5433` so it does not conflict with another Postgres installation. Use `npm run db:down` when you are finished. `npm run db:reset` recreates the local database from migrations and deletes local development data.
+
+To use Neon, Supabase, or Vercel Postgres instead, replace `DATABASE_URL` and `DIRECT_URL` in `.env` with the provider connection strings.
 
 ### 3. Import from URL
 
