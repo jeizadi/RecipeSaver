@@ -1,23 +1,12 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
 import { AUTH_ENABLED } from "@/lib/auth-config";
 import { AuthControls } from "./auth/auth-controls";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
 export const metadata: Metadata = {
-  title: "Recipebox – Recipe collection",
-  description: "Save and share recipes from any link",
+  title: "Recipebox – Weekly shopping",
+  description: "Plan meals, build a shopping list, and save recipes",
 };
 
 export default function RootLayout({
@@ -33,24 +22,30 @@ export default function RootLayout({
         <meta name="darkreader-lock" />
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} min-h-screen bg-[#fffdf8] text-[#5b3b2a] antialiased`}
+        className="min-h-screen bg-[#fffdf8] text-[#5b3b2a] antialiased"
         style={{ backgroundColor: "#fffdf8", color: "#5b3b2a" }}
       >
         <header className="border-b border-[#e0d4c7] bg-[#f6efe9]">
           <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
             <h1 className="text-lg font-semibold">
-              <Link href="/" className="hover:underline">
+              <Link href="/shop" className="hover:underline">
                 Recipebox
               </Link>
             </h1>
             <nav className="flex items-center gap-2">
               <Link
-                href="/"
+                href="/shop"
                 aria-label="Home"
                 title="Home"
                 className="rounded border border-[#d2c2af] bg-white px-2 py-1.5 text-base font-medium text-[#5b3b2a] hover:bg-[#f6efe9]"
               >
                 🏠
+              </Link>
+              <Link
+                href="/shop"
+                className="rounded border border-[#d2c2af] bg-white px-3 py-1.5 text-sm font-medium text-[#5b3b2a] hover:bg-[#f6efe9]"
+              >
+                Shop
               </Link>
               <Link
                 href="/weekly"

@@ -89,6 +89,8 @@ model AppUser {
   weeklyMeals   WeeklyMealPlan[]
   behavior      UserBehaviorAggregate?
   preferenceVector UserPreferenceVector?
+  shoppingLists ShoppingList[]
+  shoppingStaples ShoppingStaple[]
 
   @@map("app_users")
 }
@@ -140,6 +142,57 @@ model WeeklyMealPlan {
   @@index([userId, plannedFor])
   @@index([recipeId, plannedFor])
   @@map("weekly_meal_plans")
+}
+
+model ShoppingList {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  user      AppUser  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  weekStart DateTime @map("week_start")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  items     ShoppingListItem[]
+
+  @@unique([userId, weekStart])
+  @@index([userId, weekStart])
+  @@map("shopping_lists")
+}
+
+model ShoppingListItem {
+  id             Int          @id @default(autoincrement())
+  shoppingListId Int          @map("shopping_list_id")
+  shoppingList   ShoppingList @relation(fields: [shoppingListId], references: [id], onDelete: Cascade)
+  nameKey        String       @map("name_key")
+  name           String
+  quantity       String       @default("")
+  category       String       @default("other")
+  checked        Boolean      @default(false)
+  isManual       Boolean      @default(false) @map("is_manual")
+  sourceRecipeIds String      @default("") @map("source_recipe_ids")
+  sourceLabels   String       @default("") @map("source_labels")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  @@unique([shoppingListId, nameKey])
+  @@index([shoppingListId, category, checked])
+  @@map("shopping_list_items")
+}
+
+model ShoppingStaple {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  user      AppUser  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  nameKey   String   @map("name_key")
+  quantity  String   @default("")
+  category  String   @default("other")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, nameKey])
+  @@index([userId, active])
+  @@map("shopping_staples")
 }
 
 model RecipeFeature {
