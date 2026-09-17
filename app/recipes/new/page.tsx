@@ -24,9 +24,13 @@ export default async function NewRecipePage({
     tags: "",
   };
   return (
-    <div className="rounded-lg bg-white p-6 shadow-sm">
-      <h2 className="mb-4 text-xl font-semibold">Add recipe</h2>
-      <RecipeForm initial={initial} />
+    <div className="rounded-2xl border border-[#eadfca] bg-[#fffdf8] p-6 shadow-none sm:p-8">
+      <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#b66a00]">Recipe box</p>
+      <h2 className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">Add a recipe</h2>
+      <p className="mt-2 mb-6 text-sm text-slate-500">
+        Paste a recipe link to import it, or fill in the details by hand.
+      </p>
+      <RecipeForm initial={initial} autoImport={Boolean(params.sourceUrl)} />
     </div>
   );
 }
