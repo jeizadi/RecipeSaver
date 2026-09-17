@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -94,6 +95,7 @@ export function WeeklyPlannerPageClient({
   recipes: RecipeOption[];
   initialItems: WeeklyItem[];
 }) {
+  const router = useRouter();
   const initialPref = initialWeekStartPreference();
   const [items, setItems] = useState<WeeklyItem[]>(initialItems);
   const [weekStartPreference, setWeekStartPreference] =
@@ -180,6 +182,7 @@ export function WeeklyPlannerPageClient({
   }, [quickQuery, recipes]);
 
   const quickLooksLikeUrl = /^https?:\/\//i.test(quickQuery.trim());
+  const quickAddHref = `/recipes/new?${quickLooksLikeUrl ? "sourceUrl" : "title"}=${encodeURIComponent(quickQuery.trim())}`;
 
   async function addRecipe(day: DayKey, recipeId: number) {
     const selected = recipeId;
@@ -298,6 +301,17 @@ export function WeeklyPlannerPageClient({
                   setQuickQuery(e.target.value);
                   setQuickRecipe("");
                 }}
+                onKeyDown={(e) => {
+                  if (
+                    e.key === "Enter" &&
+                    quickQuery.trim() &&
+                    !quickRecipe &&
+                    quickMatches.length === 0
+                  ) {
+                    e.preventDefault();
+                    router.push(quickAddHref);
+                  }
+                }}
                 placeholder="Search recipes or paste a URL…"
                 className="min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
                 aria-label="Search recipes or paste a recipe URL"
@@ -322,8 +336,8 @@ export function WeeklyPlannerPageClient({
                     <div className="px-3 py-2 text-sm text-slate-500">
                       <p>{quickLooksLikeUrl ? "No saved recipe uses this link." : "No saved recipes match."}</p>
                       <Link
-                        href={`/recipes/new?${quickLooksLikeUrl ? "sourceUrl" : "title"}=${encodeURIComponent(quickQuery.trim())}`}
-                        className="mt-1 inline-block font-medium text-[#b66a00] hover:underline"
+                        href={quickAddHref}
+                        className="mt-2 inline-flex rounded-lg bg-[#f4b942] px-3 py-1.5 text-sm font-semibold text-[#4a2b00] hover:bg-[#e9aa2d]"
                       >
                         Add a new recipe
                       </Link>
