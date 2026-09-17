@@ -2,9 +2,8 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 
 type ShoppingItem = {
@@ -177,31 +176,31 @@ export function ShopPageClient() {
     <div className="mx-auto max-w-3xl space-y-5 pb-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-emerald-600">Your weekly shop</p>
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#b66a00]">Your weekly shop</p>
           <h2 className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">What do you need this week?</h2>
           <p className="mt-1 text-sm text-slate-500">Meals, staples, and everything else in one calm list.</p>
         </div>
         <div className="flex items-center gap-2 text-sm">
-          <Button type="button" variant="secondary" onClick={() => setWeekStart((value) => shiftWeek(value, -7))} aria-label="Previous week">←</Button>
-          <Badge className="bg-slate-100 text-slate-600">Week of {prettyDate(weekStart)}</Badge>
-          <Button type="button" variant="secondary" onClick={() => setWeekStart((value) => shiftWeek(value, 7))} aria-label="Next week">→</Button>
+          <Button type="button" variant="ghost" onClick={() => setWeekStart((value) => shiftWeek(value, -7))} aria-label="Previous week">←</Button>
+          <span className="px-1 text-sm font-medium text-slate-500">Week of {prettyDate(weekStart)}</span>
+          <Button type="button" variant="ghost" onClick={() => setWeekStart((value) => shiftWeek(value, 7))} aria-label="Next week">→</Button>
         </div>
       </div>
 
-      <Card className="overflow-hidden border-0 bg-slate-950 text-white shadow-lg shadow-slate-200">
+      <Card>
         <CardContent className="p-5 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-lg font-semibold">You’re making progress</p>
-            <p className="text-sm text-slate-300">{completed} of {items.length} items checked</p>
+            <p className="text-lg font-semibold text-slate-900">Shopping list</p>
+            <p className="text-sm text-slate-500">{completed} of {items.length} items checked</p>
           </div>
           <div className="flex gap-2">
-            <Button type="button" variant="secondary" onClick={() => void regenerate()} disabled={busy}>Refresh list</Button>
-            <Link href="/weekly" className="inline-flex min-h-10 items-center rounded-xl bg-emerald-500 px-3.5 py-2 text-sm font-medium text-white hover:bg-emerald-400">Plan a meal</Link>
+            <Button type="button" variant="ghost" onClick={() => void regenerate()} disabled={busy}>Refresh</Button>
+            <Link href="/weekly" className="inline-flex min-h-10 items-center rounded-xl px-3 py-2 text-sm font-medium text-[#a15d00] hover:bg-[#fff4d6]">Plan meals</Link>
           </div>
         </div>
-        <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-800">
-          <div className="h-full rounded-full bg-emerald-400 transition-all" style={{ width: `${items.length ? (completed / items.length) * 100 : 0}%` }} />
+        <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-slate-100">
+          <div className="h-full rounded-full bg-[#e9a227] transition-all" style={{ width: `${items.length ? (completed / items.length) * 100 : 0}%` }} />
         </div>
         </CardContent>
       </Card>
@@ -218,31 +217,32 @@ export function ShopPageClient() {
       ) : null}
 
       <div className="space-y-3">
-        {grouped.map(({ category, items: categoryItems }) => (
-          <Card key={category}>
-            <CardHeader className="pb-2"><h3 className="font-semibold text-slate-900">{CATEGORY_LABELS[category] ?? category}</h3></CardHeader>
-            <CardContent><ul className="divide-y divide-slate-100">
+        {grouped.length ? <Card><CardContent className="p-5 sm:p-6"><div className="divide-y divide-slate-100">
+          {grouped.map(({ category, items: categoryItems }) => (
+            <section key={category} className="py-4 first:pt-0 last:pb-0">
+              <h3 className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">{CATEGORY_LABELS[category] ?? category}</h3>
+              <ul className="divide-y divide-slate-100">
               {categoryItems.map((item) => (
                 <li key={item.id} className="flex items-start gap-3 py-3 first:pt-1 last:pb-1">
                   <Checkbox checked={item.checked} onChange={() => void toggle(item)} aria-label={`Mark ${item.name} complete`} />
                   <div className="min-w-0 flex-1">
-                    <p className={item.checked ? "text-sm text-slate-400 line-through" : "text-sm font-medium text-slate-800"}>{item.quantity ? `${item.quantity} ` : ""}{item.name}</p>
-                    {item.sourceLabels ? <p className="mt-0.5 truncate text-xs text-slate-400">{sourceSummary(item.sourceLabels)}</p> : null}
+                    <p title={item.sourceLabels ? sourceSummary(item.sourceLabels) : undefined} className={item.checked ? "text-sm text-slate-400 line-through" : "text-sm font-medium text-slate-800"}>{item.quantity ? `${item.quantity} ` : ""}{item.name}</p>
                   </div>
                   <Button type="button" variant="quiet" onClick={() => void remove(item)} className="min-h-7 px-1 text-xs">Remove</Button>
                 </li>
               ))}
-            </ul></CardContent>
-          </Card>
-        ))}
+              </ul>
+            </section>
+          ))}
+        </div></CardContent></Card> : null}
       </div>
 
       <Card>
-        <CardHeader className="pb-2"><h3 className="font-semibold text-slate-900">Add a staple or one-off item</h3></CardHeader>
         <CardContent>
+        <h3 className="font-semibold text-slate-900">Add an item</h3>
         <form onSubmit={addItem} className="mt-3 grid gap-2 sm:grid-cols-[1fr_9rem_auto]">
-          <input value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Coffee" className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none ring-emerald-500 placeholder:text-slate-400 focus:ring-2" />
-          <input value={quantity} onChange={(event) => setQuantity(event.target.value)} placeholder="Quantity" className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none ring-emerald-500 placeholder:text-slate-400 focus:ring-2" />
+          <input value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Coffee" className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none ring-[#e9a227] placeholder:text-slate-400 focus:ring-2" />
+          <input value={quantity} onChange={(event) => setQuantity(event.target.value)} placeholder="Quantity" className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none ring-[#e9a227] placeholder:text-slate-400 focus:ring-2" />
           <Button type="submit" disabled={busy || !name.trim()}>Add item</Button>
         </form>
         <label className="mt-3 flex items-center gap-2 text-sm text-slate-500">
