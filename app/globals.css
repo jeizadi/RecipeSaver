@@ -16,7 +16,13 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-family: "Avenir Next", "Trebuchet MS", ui-sans-serif, system-ui, sans-serif;
+}
+
+.brand-mark {
+  font-family: "Avenir Next", "Trebuchet MS", ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.04em;
+  color: #4a2b00;
 }
 
 /* Keep controls readable even when OS/browser is in dark mode. */
@@ -50,3 +56,12 @@ input::placeholder,
 textarea::placeholder {
   color: #6b7280 !important;
 }
+
+/* Keep the original prototype's utility classes on the same warm cheddar palette. */
+[class~="bg-[#e67e22]"] { background-color: #f4a51c !important; }
+[class~="hover:bg-[#cf711f]"]:hover { background-color: #e39a0f !important; }
+[class~="bg-[#fffdf8]"] { background-color: #fff7e8 !important; }
+[class~="text-[#5b3b2a]"] { color: #4a2b00 !important; }
+[class~="text-[#e67e22]"] { color: #b66a00 !important; }
+[class~="hover:bg-[#f6efe9]"]:hover { background-color: #fff0c7 !important; }
+[class~="border-[#d2c2af]"] { border-color: #eadfca !important; }

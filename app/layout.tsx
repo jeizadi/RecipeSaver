@@ -24,20 +24,12 @@ export default function RootLayout({
       <body className="min-h-screen bg-[#fff7e8] text-slate-950 antialiased">
         <header className="sticky top-0 z-10 border-b border-[#eadfca] bg-[#fff7e8]/95 backdrop-blur">
           <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-            <h1 className="text-lg font-semibold tracking-tight">
+            <h1 className="brand-mark text-lg font-semibold tracking-tight">
               <Link href="/shop" className="hover:underline">
                 Recipebox
               </Link>
             </h1>
             <nav className="flex items-center gap-1 text-sm">
-              <Link
-                href="/shop"
-                aria-label="Home"
-                title="Home"
-                className="rounded-lg px-2.5 py-2 text-base font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-950"
-              >
-                🏠
-              </Link>
               <Link
                 href="/shop"
                 className="rounded-lg bg-[#fff0c7] px-3 py-2 font-medium text-[#8a5200] hover:bg-[#ffe6a3]"
