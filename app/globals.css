@@ -57,6 +57,24 @@ textarea::placeholder {
   color: #6b7280 !important;
 }
 
+button,
+a {
+  transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid #f4b942;
+  outline-offset: 1px;
+}
+
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid #b66a00;
+  outline-offset: 2px;
+}
+
 /* Keep the original prototype's utility classes on the same warm cheddar palette. */
 [class~="bg-[#e67e22]"] { background-color: #f4a51c !important; }
 [class~="hover:bg-[#cf711f]"]:hover { background-color: #e39a0f !important; }
