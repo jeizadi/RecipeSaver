@@ -54,7 +54,7 @@ export default async function HomePage({
   } catch (err) {
     console.error("HomePage DB error:", err);
     return (
-      <div className="rounded-lg bg-amber-50 border border-amber-200 p-6 text-amber-800">
+      <div className="rounded-2xl border border-[#eadfca] bg-[#fffdf8] p-6 text-[#8a5200]">
         <p className="font-medium">Could not load recipes</p>
         <p className="mt-1 text-sm">Check your database connection and try again.</p>
         <Link href="/" className="mt-3 inline-block text-sm text-amber-700 underline">Retry</Link>
@@ -74,8 +74,9 @@ export default async function HomePage({
   return (
     <>
       <section className="mb-6">
-        <h2 className="mb-3 text-xl font-semibold">Recipebox Home</h2>
-        <p className="rounded-lg bg-white p-4 text-sm text-[#7f8c8d] shadow-sm">
+        <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#b66a00]">Recipe book</p>
+        <h2 className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">What sounds good?</h2>
+        <p className="mt-2 text-sm text-slate-500">
           Plan your week, build shopping lists, and quickly search recipes right from home.
         </p>
       </section>
@@ -89,8 +90,8 @@ export default async function HomePage({
         }))}
       />
       <section className="mb-6">
-        <h3 className="mb-2 text-lg font-semibold">Search recipes</h3>
-        <form method="get" className="flex flex-wrap items-end gap-3 rounded-lg bg-white p-4 shadow-sm">
+        <h3 className="mb-2 text-lg font-semibold text-slate-900">Find a recipe</h3>
+        <form method="get" className="flex flex-wrap items-end gap-3 rounded-2xl border border-[#eadfca] bg-white p-4 shadow-none">
           <label className="flex flex-col gap-1">
             <span className="text-sm font-medium">Title</span>
             <input type="text" name="q" defaultValue={q} className="rounded border border-[#d2c2af] px-2 py-1.5 text-sm" />
@@ -107,7 +108,7 @@ export default async function HomePage({
               ))}
             </select>
           </label>
-          <button type="submit" className="rounded bg-[#e67e22] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#cf711f]">Search</button>
+          <button type="submit" className="rounded-xl bg-[#f4a51c] px-3 py-2 text-sm font-semibold text-[#4a2b00] hover:bg-[#e39a0f]">Search</button>
           {(q || ingredient || category) && (
             <Link href="/" className="text-sm underline">Clear</Link>
           )}
@@ -135,7 +136,7 @@ export default async function HomePage({
             />
           </>
         ) : (
-          <p className="rounded-lg bg-white p-6 text-center text-[#7f8c8d]">
+          <p className="rounded-2xl border border-[#eadfca] bg-white p-8 text-center text-slate-500">
             No recipes yet.{" "}
             <Link href="/recipes/new" className="text-[#e67e22] hover:underline">
               Add your first one

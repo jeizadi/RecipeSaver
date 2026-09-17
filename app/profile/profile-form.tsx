@@ -94,7 +94,7 @@ export function ProfileForm() {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="grid gap-4 sm:grid-cols-2">
       <label className="block text-sm">
         <span className="mb-1 block text-[#7f8c8d]">Dietary restrictions</span>
         <input
@@ -183,11 +183,11 @@ export function ProfileForm() {
         type="button"
         onClick={save}
         disabled={loading}
-        className="rounded bg-[#e67e22] px-3 py-2 text-sm font-medium text-white hover:bg-[#cf711f] disabled:opacity-60"
+        className="rounded-xl bg-[#f4a51c] px-3 py-2 text-sm font-semibold text-[#4a2b00] hover:bg-[#e39a0f] disabled:opacity-60 sm:col-span-2 sm:w-fit"
       >
         {loading ? "Saving..." : "Save profile"}
       </button>
-      {status && <p className="text-sm text-[#7f8c8d]">{status}</p>}
+      {status && <p className="text-sm text-slate-500 sm:col-span-2">{status}</p>}
     </div>
   );
 }

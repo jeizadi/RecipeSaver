@@ -40,9 +40,12 @@ export default async function SearchPage({
   });
 
   return (
-    <div className="space-y-4">
-      <h2 className="text-xl font-semibold">Search recipes</h2>
-      <form method="get" className="flex flex-wrap items-end gap-3 rounded-lg bg-white p-4 shadow-sm">
+    <div className="space-y-5">
+      <div>
+        <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#b66a00]">Recipe book</p>
+        <h2 className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">Find a recipe</h2>
+      </div>
+      <form method="get" className="flex flex-wrap items-end gap-3 rounded-2xl border border-[#eadfca] bg-white p-4 shadow-none">
         <label className="flex flex-col gap-1">
           <span className="text-sm font-medium">Title</span>
           <input type="text" name="q" defaultValue={q} className="rounded border border-[#d2c2af] px-2 py-1.5 text-sm" />
@@ -59,11 +62,11 @@ export default async function SearchPage({
             ))}
           </select>
         </label>
-        <button type="submit" className="rounded bg-[#e67e22] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#cf711f]">Search</button>
+        <button type="submit" className="rounded-xl bg-[#f4a51c] px-3 py-2 text-sm font-semibold text-[#4a2b00] hover:bg-[#e39a0f]">Search</button>
       </form>
       <ul className="grid gap-3 sm:grid-cols-2">
         {recipes.map((r) => (
-          <li key={r.id} className="rounded-lg bg-white p-4 shadow-sm">
+          <li key={r.id} className="rounded-2xl border border-[#eadfca] bg-white p-4 shadow-none">
             <h3 className="font-semibold"><Link href={`/recipes/${r.id}`} className="hover:underline">{r.title}</Link></h3>
             <p className="text-xs text-[#7f8c8d]">{r.category} {r.tags ? `· ${r.tags}` : ""}</p>
           </li>

@@ -32,9 +32,10 @@ export default async function RecipePage({
   const categoryLabel = CATEGORIES[recipe.category] ?? recipe.category;
 
   return (
-    <article className="rounded-lg bg-white p-6 shadow-sm">
+    <article className="rounded-2xl border border-[#eadfca] bg-[#fffdf8] p-6 shadow-none sm:p-8">
       <header className="mb-6">
-        <h2 className="text-2xl font-semibold">{recipe.title}</h2>
+        <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#b66a00]">Recipe</p>
+        <h2 className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">{recipe.title}</h2>
         <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-[#7f8c8d]">
           <span className="rounded-full bg-[#fdebd0] px-2 py-0.5">
             {categoryLabel}
