@@ -173,7 +173,7 @@ export function ShopPageClient() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 pb-8">
+    <div className="mx-auto max-w-3xl space-y-4 pb-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#b66a00]">Your weekly shop</p>
@@ -187,12 +187,12 @@ export function ShopPageClient() {
         </div>
       </div>
 
-      <Card>
-        <CardContent className="p-5 sm:p-6">
+      <Card className="border-[#f0d48d] bg-[#fff0c7] shadow-none">
+        <CardContent className="p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-lg font-semibold text-slate-900">Shopping list</p>
-            <p className="text-sm text-slate-500">{completed} of {items.length} items checked</p>
+            <p className="text-lg font-semibold text-[#4a2b00]">Shopping list</p>
+            <p className="text-sm text-[#8a5200]">{completed} of {items.length} items checked</p>
           </div>
           <div className="flex gap-2">
             <Button type="button" variant="ghost" onClick={() => void regenerate()} disabled={busy}>Refresh</Button>
@@ -217,10 +217,10 @@ export function ShopPageClient() {
       ) : null}
 
       <div className="space-y-3">
-        {grouped.length ? <Card><CardContent className="p-5 sm:p-6"><div className="divide-y divide-slate-100">
+        {grouped.length ? <Card><CardContent className="p-4 sm:p-5"><div className="divide-y divide-slate-100">
           {grouped.map(({ category, items: categoryItems }) => (
-            <section key={category} className="py-4 first:pt-0 last:pb-0">
-              <h3 className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">{CATEGORY_LABELS[category] ?? category}</h3>
+            <section key={category} className="border-l-4 border-[#f4a51c] py-2 pl-3 first:pt-0 last:pb-0">
+              <h3 className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-[#b66a00]">{CATEGORY_LABELS[category] ?? category}</h3>
               <ul className="divide-y divide-slate-100">
               {categoryItems.map((item) => (
                 <li key={item.id} className="flex items-start gap-3 py-3 first:pt-1 last:pb-1">
@@ -237,8 +237,8 @@ export function ShopPageClient() {
         </div></CardContent></Card> : null}
       </div>
 
-      <Card>
-        <CardContent>
+      <Card className="bg-[#fffdf7]">
+        <CardContent className="p-4 sm:p-5">
         <h3 className="font-semibold text-slate-900">Add an item</h3>
         <form onSubmit={addItem} className="mt-3 grid gap-2 sm:grid-cols-[1fr_9rem_auto]">
           <input value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Coffee" className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none ring-[#e9a227] placeholder:text-slate-400 focus:ring-2" />

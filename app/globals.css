@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  --background: #fffaf0;
+  --background: #fff7e8;
   --foreground: #172033;
   color-scheme: light;
 }
@@ -30,7 +30,7 @@ textarea {
 html,
 body {
   color-scheme: light !important;
-  background: #fffaf0 !important;
+  background: #fff7e8 !important;
   color: #172033 !important;
 }
 

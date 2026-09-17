@@ -21,8 +21,8 @@ export default function RootLayout({
         <meta name="supported-color-schemes" content="light" />
         <meta name="darkreader-lock" />
       </head>
-      <body className="min-h-screen bg-[#fffaf0] text-slate-950 antialiased">
-        <header className="sticky top-0 z-10 border-b border-[#eadfca] bg-[#fffaf0]/95 backdrop-blur">
+      <body className="min-h-screen bg-[#fff7e8] text-slate-950 antialiased">
+        <header className="sticky top-0 z-10 border-b border-[#eadfca] bg-[#fff7e8]/95 backdrop-blur">
           <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
             <h1 className="text-lg font-semibold tracking-tight">
               <Link href="/shop" className="hover:underline">
