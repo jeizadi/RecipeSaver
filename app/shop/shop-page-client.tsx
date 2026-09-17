@@ -2,6 +2,10 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type ShoppingItem = {
   id: number;
@@ -170,77 +174,83 @@ export function ShopPageClient() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="mx-auto max-w-3xl space-y-5 pb-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-medium uppercase tracking-wide text-[#e67e22]">Shop</p>
-          <h2 className="text-2xl font-semibold">What do I need this week?</h2>
-          <p className="mt-1 text-sm text-[#7f8c8d]">Meals, staples, and everything else in one list.</p>
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-emerald-600">Your weekly shop</p>
+          <h2 className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">What do you need this week?</h2>
+          <p className="mt-1 text-sm text-slate-500">Meals, staples, and everything else in one calm list.</p>
         </div>
         <div className="flex items-center gap-2 text-sm">
-          <button type="button" onClick={() => setWeekStart((value) => shiftWeek(value, -7))} className="rounded border border-[#d2c2af] bg-white px-2 py-1.5">←</button>
-          <span className="rounded bg-[#f6efe9] px-3 py-1.5 font-medium">Week of {prettyDate(weekStart)}</span>
-          <button type="button" onClick={() => setWeekStart((value) => shiftWeek(value, 7))} className="rounded border border-[#d2c2af] bg-white px-2 py-1.5">→</button>
+          <Button type="button" variant="secondary" onClick={() => setWeekStart((value) => shiftWeek(value, -7))} aria-label="Previous week">←</Button>
+          <Badge className="bg-slate-100 text-slate-600">Week of {prettyDate(weekStart)}</Badge>
+          <Button type="button" variant="secondary" onClick={() => setWeekStart((value) => shiftWeek(value, 7))} aria-label="Next week">→</Button>
         </div>
       </div>
 
-      <section className="rounded-xl border border-[#e0d4c7] bg-white p-4 shadow-sm">
+      <Card className="overflow-hidden border-0 bg-slate-950 text-white shadow-lg shadow-slate-200">
+        <CardContent className="p-5 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-lg font-semibold">Shopping list</p>
-            <p className="text-sm text-[#7f8c8d]">{completed} of {items.length} items checked</p>
+            <p className="text-lg font-semibold">You’re making progress</p>
+            <p className="text-sm text-slate-300">{completed} of {items.length} items checked</p>
           </div>
           <div className="flex gap-2">
-            <button type="button" onClick={() => void regenerate()} disabled={busy} className="rounded border border-[#d2c2af] px-3 py-2 text-sm hover:bg-[#f6efe9] disabled:opacity-60">Update from meals</button>
-            <Link href="/weekly" className="rounded bg-[#e67e22] px-3 py-2 text-sm font-medium text-white hover:bg-[#cf711f]">Plan a meal</Link>
+            <Button type="button" variant="secondary" onClick={() => void regenerate()} disabled={busy}>Refresh list</Button>
+            <Link href="/weekly" className="inline-flex min-h-10 items-center rounded-xl bg-emerald-500 px-3.5 py-2 text-sm font-medium text-white hover:bg-emerald-400">Plan a meal</Link>
           </div>
         </div>
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#f0e7dc]">
-          <div className="h-full rounded-full bg-[#e67e22] transition-all" style={{ width: `${items.length ? (completed / items.length) * 100 : 0}%` }} />
+        <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-800">
+          <div className="h-full rounded-full bg-emerald-400 transition-all" style={{ width: `${items.length ? (completed / items.length) * 100 : 0}%` }} />
         </div>
-      </section>
+        </CardContent>
+      </Card>
 
       {status ? <p className="text-sm text-[#7f8c8d]">{status}</p> : null}
       {busy && !items.length ? <p className="rounded-lg bg-white p-6 text-sm text-[#7f8c8d]">Loading your list…</p> : null}
       {!busy && !items.length ? (
-        <section className="rounded-xl border border-dashed border-[#d2c2af] bg-white p-8 text-center">
-          <p className="font-medium">Your list is empty.</p>
-          <p className="mt-1 text-sm text-[#7f8c8d]">Plan a meal or add a staple below to get started.</p>
-        </section>
+        <Card className="border-dashed">
+          <CardContent className="p-8 text-center">
+          <p className="font-medium text-slate-900">Your list is empty.</p>
+          <p className="mt-1 text-sm text-slate-500">Plan a meal or add a staple below to get started.</p>
+          </CardContent>
+        </Card>
       ) : null}
 
       <div className="space-y-3">
         {grouped.map(({ category, items: categoryItems }) => (
-          <section key={category} className="rounded-xl border border-[#e0d4c7] bg-white p-4 shadow-sm">
-            <h3 className="mb-2 font-semibold">{CATEGORY_LABELS[category] ?? category}</h3>
-            <ul className="divide-y divide-[#f0e7dc]">
+          <Card key={category}>
+            <CardHeader className="pb-2"><h3 className="font-semibold text-slate-900">{CATEGORY_LABELS[category] ?? category}</h3></CardHeader>
+            <CardContent><ul className="divide-y divide-slate-100">
               {categoryItems.map((item) => (
                 <li key={item.id} className="flex items-start gap-3 py-3 first:pt-1 last:pb-1">
-                  <input type="checkbox" checked={item.checked} onChange={() => void toggle(item)} className="mt-1 h-5 w-5 accent-[#e67e22]" aria-label={`Mark ${item.name} complete`} />
+                  <Checkbox checked={item.checked} onChange={() => void toggle(item)} aria-label={`Mark ${item.name} complete`} />
                   <div className="min-w-0 flex-1">
-                    <p className={item.checked ? "text-sm text-[#a59a91] line-through" : "text-sm font-medium"}>{item.quantity ? `${item.quantity} ` : ""}{item.name}</p>
-                    {item.sourceLabels ? <p className="mt-0.5 truncate text-xs text-[#7f8c8d]">{sourceSummary(item.sourceLabels)}</p> : null}
+                    <p className={item.checked ? "text-sm text-slate-400 line-through" : "text-sm font-medium text-slate-800"}>{item.quantity ? `${item.quantity} ` : ""}{item.name}</p>
+                    {item.sourceLabels ? <p className="mt-0.5 truncate text-xs text-slate-400">{sourceSummary(item.sourceLabels)}</p> : null}
                   </div>
-                  <button type="button" onClick={() => void remove(item)} className="text-xs text-[#7f8c8d] underline">Remove</button>
+                  <Button type="button" variant="quiet" onClick={() => void remove(item)} className="min-h-7 px-1 text-xs">Remove</Button>
                 </li>
               ))}
-            </ul>
-          </section>
+            </ul></CardContent>
+          </Card>
         ))}
       </div>
 
-      <section className="rounded-xl border border-[#e0d4c7] bg-white p-4 shadow-sm">
-        <h3 className="font-semibold">Add a staple or one-off item</h3>
+      <Card>
+        <CardHeader className="pb-2"><h3 className="font-semibold text-slate-900">Add a staple or one-off item</h3></CardHeader>
+        <CardContent>
         <form onSubmit={addItem} className="mt-3 grid gap-2 sm:grid-cols-[1fr_9rem_auto]">
-          <input value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Coffee" className="rounded border border-[#d2c2af] px-3 py-2 text-sm" />
-          <input value={quantity} onChange={(event) => setQuantity(event.target.value)} placeholder="Quantity" className="rounded border border-[#d2c2af] px-3 py-2 text-sm" />
-          <button type="submit" disabled={busy || !name.trim()} className="rounded bg-[#e67e22] px-3 py-2 text-sm font-medium text-white hover:bg-[#cf711f] disabled:opacity-60">Add item</button>
+          <input value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Coffee" className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none ring-emerald-500 placeholder:text-slate-400 focus:ring-2" />
+          <input value={quantity} onChange={(event) => setQuantity(event.target.value)} placeholder="Quantity" className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none ring-emerald-500 placeholder:text-slate-400 focus:ring-2" />
+          <Button type="submit" disabled={busy || !name.trim()}>Add item</Button>
         </form>
-        <label className="mt-3 flex items-center gap-2 text-sm text-[#7f8c8d]">
-          <input type="checkbox" checked={saveAsStaple} onChange={(event) => setSaveAsStaple(event.target.checked)} className="accent-[#e67e22]" />
+        <label className="mt-3 flex items-center gap-2 text-sm text-slate-500">
+          <Checkbox checked={saveAsStaple} onChange={(event) => setSaveAsStaple(event.target.checked)} />
           Save this as a recurring staple
         </label>
-      </section>
+        </CardContent>
+      </Card>
     </div>
   );
 }
