@@ -86,10 +86,6 @@ function plannedItemDateKey(value: string): string {
   return d.toISOString().slice(0, 10);
 }
 
-function weekPoolStorageKey(weekStartPreference: WeekStartPreference, weekStart: Date): string {
-  return `weeklyPlanner.weekPool.${weekStartPreference}.${toIsoDate(weekStart)}`;
-}
-
 export function WeeklyPlannerPageClient({
   recipes,
   initialItems,
@@ -102,20 +98,10 @@ export function WeeklyPlannerPageClient({
   const [weekStartPreference, setWeekStartPreference] =
     useState<WeekStartPreference>(initialPref);
   const [weekStart, setWeekStart] = useState<Date>(startOfWeek(new Date(), initialPref));
-  const [addByDay, setAddByDay] = useState<Record<DayKey, string>>({
-    monday: "",
-    tuesday: "",
-    wednesday: "",
-    thursday: "",
-    friday: "",
-    saturday: "",
-    sunday: "",
-  });
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
-  const [spanDays, setSpanDays] = useState(1);
-  const [weekPoolPick, setWeekPoolPick] = useState("");
-  const [, setWeekPoolRevision] = useState(0);
+  const [quickRecipe, setQuickRecipe] = useState("");
+  const [quickDay, setQuickDay] = useState<DayKey>("monday");
   const dayOrder = useMemo(
     () => orderedDays(weekStartPreference),
     [weekStartPreference]
@@ -183,55 +169,8 @@ export function WeeklyPlannerPageClient({
     return out;
   }, [items, weekDates, dayOrder]);
 
-  const uniqueWeekRecipes = useMemo(() => {
-    const m = new Map<number, string>();
-    for (const item of items) {
-      m.set(item.recipe.id, item.recipe.title);
-    }
-    return Array.from(m.entries())
-      .map(([id, title]) => ({ id, title }))
-      .sort((a, b) => a.title.localeCompare(b.title));
-  }, [items]);
-
-  const weekPoolKey = useMemo(
-    () => weekPoolStorageKey(weekStartPreference, weekStart),
-    [weekStartPreference, weekStart]
-  );
-
-  const manualWeekRecipeIds = (() => {
-    if (typeof window === "undefined") return [] as number[];
-    const raw = window.localStorage.getItem(weekPoolKey);
-    if (!raw) return [] as number[];
-    try {
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return [] as number[];
-      return parsed
-        .map((v) => Number(v))
-        .filter((v) => Number.isInteger(v) && v > 0);
-    } catch {
-      return [] as number[];
-    }
-  })();
-
-  const weekPoolRecipes = useMemo(() => {
-    const ids = new Set([
-      ...uniqueWeekRecipes.map((r) => r.id),
-      ...manualWeekRecipeIds,
-    ]);
-    return recipes
-      .filter((r) => ids.has(r.id))
-      .map((r) => ({ id: r.id, title: r.title }))
-      .sort((a, b) => a.title.localeCompare(b.title));
-  }, [recipes, uniqueWeekRecipes, manualWeekRecipeIds]);
-
-  function saveManualWeekPool(ids: number[]) {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(weekPoolKey, JSON.stringify(Array.from(new Set(ids))));
-    setWeekPoolRevision((v) => v + 1);
-  }
-
-  async function addRecipe(day: DayKey) {
-    const selected = Number(addByDay[day]);
+  async function addRecipe(day: DayKey, recipeId: number) {
+    const selected = recipeId;
     if (!Number.isInteger(selected) || selected < 1) {
       setStatus("Select a recipe first.");
       return;
@@ -240,7 +179,7 @@ export function WeeklyPlannerPageClient({
     const start = new Date(`${weekDates[day]}T12:00:00.000Z`);
     let firstError: string | null = null;
     let created = 0;
-    for (let i = 0; i < spanDays; i++) {
+    for (let i = 0; i < 1; i++) {
       const d = new Date(start);
       d.setUTCDate(d.getUTCDate() + i);
       const plannedFor = d.toISOString().slice(0, 10);
@@ -265,8 +204,17 @@ export function WeeklyPlannerPageClient({
         ? `Added to ${dayLabel(day)} and next ${created - 1} day(s).`
         : `Added to ${dayLabel(day)}.`
     );
-    setAddByDay((prev) => ({ ...prev, [day]: "" }));
     await refreshWeek(weekStart);
+  }
+
+  async function addQuickMeal() {
+    const selected = Number(quickRecipe);
+    if (!Number.isInteger(selected) || selected < 1) {
+      setStatus("Select a recipe first.");
+      return;
+    }
+    await addRecipe(quickDay, selected);
+    setQuickRecipe("");
   }
 
   async function removeMeal(item: WeeklyItem) {
@@ -278,28 +226,6 @@ export function WeeklyPlannerPageClient({
     });
     setBusy(false);
     await refreshWeek(weekStart);
-  }
-
-  function addRecipeToWeekPool() {
-    const id = Number(weekPoolPick);
-    if (!Number.isInteger(id) || id < 1) {
-      setStatus("Select a recipe to add to this week first.");
-      return;
-    }
-    saveManualWeekPool(manualWeekRecipeIds.includes(id) ? manualWeekRecipeIds : [...manualWeekRecipeIds, id]);
-    setWeekPoolPick("");
-    setStatus("Added to this week's recipe list. Assign it to a day when ready.");
-  }
-
-  function removeRecipeFromWeekPool(recipeId: number) {
-    saveManualWeekPool(manualWeekRecipeIds.filter((id) => id !== recipeId));
-    setAddByDay((prev) => {
-      const next = { ...prev };
-      (Object.keys(next) as DayKey[]).forEach((k) => {
-        if (next[k] === String(recipeId)) next[k] = "";
-      });
-      return next;
-    });
   }
 
   function shiftWeek(deltaDays: number) {
@@ -325,14 +251,14 @@ export function WeeklyPlannerPageClient({
         </div>
       </header>
 
-      <Card className="border-[#f0d48d] bg-[#fff0c7] shadow-none">
+      <Card className="border-[#eadfca] bg-white shadow-none">
         <CardContent className="p-4 sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h3 className="font-semibold text-[#4a2b00]">Meal ideas</h3>
-              <p className="mt-1 text-sm text-[#8a5200]">Keep a short list of recipes you&apos;re considering.</p>
+              <h3 className="font-semibold text-slate-900">Add a meal</h3>
+              <p className="mt-1 text-sm text-slate-500">Pick a recipe and a day.</p>
             </div>
-            <label className="text-sm text-[#8a5200]">
+            <label className="text-sm text-slate-500">
               Week starts
               <select
                 value={weekStartPreference}
@@ -343,32 +269,31 @@ export function WeeklyPlannerPageClient({
                   setWeekStart(nextStart);
                   void refreshWeek(nextStart);
                 }}
-                className="ml-2 rounded-lg border border-[#f0d48d] bg-white px-2 py-1.5 text-sm text-slate-700"
+                className="ml-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-700"
               >
                 <option value="monday">Monday</option>
                 <option value="sunday">Sunday</option>
               </select>
             </label>
           </div>
-          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+          <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_10rem_auto]">
             <select
-              value={weekPoolPick}
-              onChange={(e) => setWeekPoolPick(e.target.value)}
-              className="min-h-10 min-w-0 flex-1 rounded-xl border border-[#f0d48d] bg-white px-3 py-2 text-sm text-slate-700"
+              value={quickRecipe}
+              onChange={(e) => setQuickRecipe(e.target.value)}
+              className="min-h-10 min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
             >
-              <option value="">Add a recipe to this week…</option>
+              <option value="">Choose a recipe…</option>
               {recipes.map((r) => <option key={r.id} value={r.id}>{r.title}</option>)}
             </select>
-            <Button type="button" variant="secondary" onClick={addRecipeToWeekPool}>Add idea</Button>
+            <select
+              value={quickDay}
+              onChange={(e) => setQuickDay(e.target.value as DayKey)}
+              className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+            >
+              {dayOrder.map((day) => <option key={day} value={day}>{dayLabel(day)}</option>)}
+            </select>
+            <Button type="button" onClick={() => void addQuickMeal()} disabled={busy || !quickRecipe}>Add meal</Button>
           </div>
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-[#8a5200]">
-            <span>Repeat for</span>
-            <input type="number" min={1} max={7} value={spanDays} onChange={(e) => setSpanDays(Math.min(7, Math.max(1, Number(e.target.value) || 1)))} className="w-14 rounded-lg border border-[#f0d48d] bg-white px-2 py-1 text-center text-xs text-slate-700" />
-            <span>day(s)</span>
-          </div>
-          {weekPoolRecipes.length ? <div className="mt-3 flex flex-wrap gap-2">
-            {weekPoolRecipes.map((r) => <span key={r.id} className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-sm text-slate-700 shadow-sm"><span>{r.title}</span><button type="button" onClick={() => removeRecipeFromWeekPool(r.id)} className="text-slate-400 hover:text-slate-700" aria-label={`Remove ${r.title}`}>×</button></span>)}
-          </div> : <p className="mt-3 text-sm text-[#8a5200]">No meal ideas yet.</p>}
         </CardContent>
       </Card>
 
@@ -376,18 +301,11 @@ export function WeeklyPlannerPageClient({
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {dayOrder.map((day) => (
-          <Card key={day} className="min-h-[220px]">
+          <Card key={day} className="min-h-[150px]">
             <CardContent className="p-4">
               <div className="mb-3 flex items-baseline justify-between gap-2 border-b border-slate-100 pb-3">
                 <p className="font-semibold text-slate-900">{dayLabel(day)}</p>
                 <p className="text-xs text-slate-400">{weekDates[day]}</p>
-              </div>
-              <div className="mb-3 space-y-2">
-                <select value={addByDay[day]} onChange={(e) => setAddByDay((prev) => ({ ...prev, [day]: e.target.value }))} className="min-h-9 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700">
-                  <option value="">Choose a meal…</option>
-                  {weekPoolRecipes.map((r) => <option key={r.id} value={r.id}>{r.title}</option>)}
-                </select>
-                <Button type="button" onClick={() => void addRecipe(day)} disabled={busy} className="w-full">Add to {dayLabel(day)}</Button>
               </div>
               {byDay[day].length === 0 ? <p className="text-xs text-slate-400">Nothing planned yet.</p> : <ul className="space-y-2">{byDay[day].map((item) => <li key={item.id} className="rounded-xl bg-[#fff7e8] px-3 py-2"><p className="text-sm font-medium text-slate-800">{item.recipe.title}</p><button type="button" onClick={() => void removeMeal(item)} className="mt-1 text-xs text-slate-400 underline hover:text-slate-700">Remove</button></li>)}</ul>}
             </CardContent>
