@@ -69,6 +69,7 @@ export function Navigation() {
       <Link href="/recipes/new" className="hidden rounded-lg bg-[#f4a51c] px-3 py-2 font-medium text-[#4a2b00] hover:bg-[#e39a0f] sm:inline-flex">
         Add Recipe
       </Link>
+      {AUTH_ENABLED && <AuthControls />}
       <button
         type="button"
         aria-label="Profile"
@@ -96,7 +97,6 @@ export function Navigation() {
           </Link>
         </div>
       )}
-      {AUTH_ENABLED && <AuthControls />}
     </nav>
   );
 }
