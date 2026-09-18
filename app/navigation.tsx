@@ -10,7 +10,6 @@ const links = [
   { href: "/shop", label: "Shop", show: "always" },
   { href: "/weekly", label: "Weekly Plan", show: "sm" },
   { href: "/suggestions", label: "Discover", show: "md" },
-  { href: "/search", label: "Search", show: "lg" },
 ] as const;
 
 function isActive(pathname: string, href: string) {
@@ -20,8 +19,9 @@ function isActive(pathname: string, href: string) {
 export function Navigation() {
   const pathname = usePathname();
   const [profileOpen, setProfileOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   return (
-    <nav className="flex items-center gap-1 text-sm">
+    <nav className="relative flex items-center gap-1 text-sm">
       {links.map((link) => (
         <Link
           key={link.href}
@@ -30,12 +30,42 @@ export function Navigation() {
           className={`rounded-lg px-3 py-2 font-medium transition-colors ${
             link.show === "sm" ? "hidden sm:inline-flex" :
             link.show === "md" ? "hidden md:inline-flex" :
-            link.show === "lg" ? "hidden lg:inline-flex" : "inline-flex"
+            "inline-flex"
           } ${isActive(pathname, link.href) ? "bg-[#fff0c7] text-[#8a5200]" : "text-slate-700 hover:bg-[#fff0c7]"}`}
         >
           {link.label}
         </Link>
       ))}
+      <div className="relative hidden lg:block">
+        <button
+          type="button"
+          aria-expanded={searchOpen}
+          onClick={() => setSearchOpen((open) => !open)}
+          className={`rounded-lg px-3 py-2 font-medium ${searchOpen || pathname.startsWith("/search") ? "bg-[#fff0c7] text-[#8a5200]" : "text-slate-700 hover:bg-[#fff0c7]"}`}
+        >
+          Search
+        </button>
+        {searchOpen && (
+          <form action="/search" method="get" className="absolute right-0 top-12 z-20 w-80 rounded-2xl border border-[#eadfca] bg-[#fffdf8] p-3 shadow-lg">
+            <label className="block text-xs font-medium text-slate-500" htmlFor="nav-search-query">Recipe or keyword</label>
+            <input id="nav-search-query" name="q" autoFocus placeholder="Try enchiladas…" className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <input name="ingredient" placeholder="Ingredient" className="rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+              <select name="category" defaultValue="" className="rounded-xl border border-slate-200 px-3 py-2 text-sm">
+                <option value="">Any type</option>
+                <option value="breakfast">Breakfast</option>
+                <option value="lunch">Lunch</option>
+                <option value="dinner">Dinner</option>
+                <option value="snack">Snack</option>
+                <option value="dessert">Dessert</option>
+                <option value="side">Side</option>
+                <option value="sauce">Sauce</option>
+              </select>
+            </div>
+            <button type="submit" className="mt-3 w-full rounded-xl bg-[#f4a51c] px-3 py-2 text-sm font-semibold text-[#4a2b00] hover:bg-[#e39a0f]">Search recipes</button>
+          </form>
+        )}
+      </div>
       <Link href="/recipes/new" className="hidden rounded-lg bg-[#f4a51c] px-3 py-2 font-medium text-[#4a2b00] hover:bg-[#e39a0f] sm:inline-flex">
         Add Recipe
       </Link>
