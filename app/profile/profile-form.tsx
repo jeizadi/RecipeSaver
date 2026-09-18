@@ -37,6 +37,8 @@ export function ProfileForm() {
   const [weeklyBudgetCents, setWeeklyBudgetCents] = useState<number | "">("");
   const [budgetToleranceRatio, setBudgetToleranceRatio] = useState(0.15);
   const [trustedSourceRatio, setTrustedSourceRatio] = useState(0.65);
+  const [partnerEmail, setPartnerEmail] = useState("");
+  const [householdMembers, setHouseholdMembers] = useState<Array<{ email: string; name: string }>>([]);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -68,6 +70,13 @@ export function ProfileForm() {
       .catch(() => undefined);
   }, []);
 
+  useEffect(() => {
+    fetch("/api/household")
+      .then((r) => r.json())
+      .then((d) => setHouseholdMembers(d.household?.members?.map((m: { user: { email: string; name: string } }) => m.user) ?? []))
+      .catch(() => undefined);
+  }, []);
+
   async function save() {
     setLoading(true);
     setStatus("");
@@ -91,6 +100,20 @@ export function ProfileForm() {
     const data = await res.json().catch(() => ({}));
     setLoading(false);
     setStatus(data.ok ? "Saved profile preferences." : data.error ?? "Failed to save.");
+  }
+
+  async function invitePartner() {
+    const res = await fetch("/api/household", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: partnerEmail }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (data.ok) {
+      setPartnerEmail("");
+      setHouseholdMembers(data.household?.members?.map((m: { user: { email: string; name: string } }) => m.user) ?? []);
+      setStatus("Your partner now shares this Recipebox household.");
+    } else setStatus(data.error ?? "Could not add partner.");
   }
 
   return (
@@ -179,6 +202,18 @@ export function ProfileForm() {
           className="w-full rounded border border-[#d2c2af] px-3 py-2"
         />
       </label>
+      <section className="rounded-2xl border border-[#eadfca] bg-white p-4 sm:col-span-2">
+        <h3 className="font-semibold text-slate-900">Share your kitchen</h3>
+        <p className="mt-1 text-sm text-slate-500">Share recipes and shopping lists with one partner.</p>
+        {householdMembers.length > 1 ? (
+          <p className="mt-3 text-sm text-[#8a5200]">Shared with {householdMembers.filter((member) => member.email !== "").slice(1).map((member) => member.name || member.email).join(", ")}.</p>
+        ) : (
+          <div className="mt-3 flex flex-wrap gap-2">
+            <input value={partnerEmail} onChange={(e) => setPartnerEmail(e.target.value)} type="email" placeholder="Partner email" className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+            <button type="button" onClick={() => void invitePartner()} disabled={!partnerEmail.trim()} className="rounded-xl border border-[#f4b942] bg-[#fff0c7] px-3 py-2 text-sm font-semibold text-[#8a5200] hover:bg-[#ffe6a3] disabled:opacity-50">Add partner</button>
+          </div>
+        )}
+      </section>
       <button
         type="button"
         onClick={save}
