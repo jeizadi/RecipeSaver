@@ -7,7 +7,8 @@ import {
 import { importRecipeFromUrl } from "@/lib/import-recipe";
 import { parseBaseServings, scaleIngredientsText } from "@/lib/ingredient-scale";
 import { refineAggregatedItemsWithLlm } from "@/lib/shopping-list-llm";
-import { getRequestUser, recipeReadFilter, weeklyPlanOwnerId } from "@/lib/access";
+import { getRequestUser, recipeReadFilter } from "@/lib/access";
+import { getHouseholdUserIds } from "@/lib/households";
 import {
   categoryForIngredient,
   getOwnedShoppingList,
@@ -34,8 +35,9 @@ type RequestBody = {
 export async function GET(request: NextRequest) {
   const user = await getRequestUser(request);
   if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  const householdUserIds = await getHouseholdUserIds(user.id);
   const weekStart = parseWeekStart(request.nextUrl.searchParams.get("weekStart"));
-  const list = await syncShoppingList(weeklyPlanOwnerId(user), weekStart);
+  const list = await syncShoppingList(householdUserIds, weekStart);
   return NextResponse.json({ ok: true, weekStart: weekStart.toISOString().slice(0, 10), list });
 }
 
@@ -44,6 +46,7 @@ export async function POST(request: NextRequest) {
   if (!user) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
+  const householdUserIds = await getHouseholdUserIds(user.id);
   let body: RequestBody;
   try {
     body = await request.json();
@@ -56,7 +59,7 @@ export async function POST(request: NextRequest) {
 
   if (body.action === "sync") {
     const weekStart = parseWeekStart(body.weekStart);
-    const list = await syncShoppingList(weeklyPlanOwnerId(user), weekStart);
+    const list = await syncShoppingList(householdUserIds, weekStart);
     return NextResponse.json({ ok: true, weekStart: weekStart.toISOString().slice(0, 10), list });
   }
 
@@ -68,8 +71,8 @@ export async function POST(request: NextRequest) {
       : categoryForIngredient(name);
     const weekStart = parseWeekStart(body.weekStart);
     const list = await prisma.shoppingList.upsert({
-      where: { userId_weekStart: { userId: weeklyPlanOwnerId(user), weekStart } },
-      create: { userId: weeklyPlanOwnerId(user), weekStart },
+      where: { userId_weekStart: { userId: householdUserIds[0], weekStart } },
+      create: { userId: householdUserIds[0], weekStart },
       update: {},
     });
     const nameKey = normalizeShoppingName(name);
@@ -88,8 +91,8 @@ export async function POST(request: NextRequest) {
     });
     if (body.saveAsStaple) {
       await prisma.shoppingStaple.upsert({
-        where: { userId_nameKey: { userId: weeklyPlanOwnerId(user), nameKey } },
-        create: { userId: weeklyPlanOwnerId(user), name, nameKey, quantity: body.quantity?.trim() ?? "", category },
+        where: { userId_nameKey: { userId: householdUserIds[0], nameKey } },
+        create: { userId: householdUserIds[0], name, nameKey, quantity: body.quantity?.trim() ?? "", category },
         update: { name, quantity: body.quantity?.trim() ?? "", category, active: true },
       });
     }
@@ -223,6 +226,7 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   const user = await getRequestUser(request);
   if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  const householdUserIds = await getHouseholdUserIds(user.id);
   const body = (await request.json().catch(() => null)) as {
     id?: number;
     checked?: boolean;
@@ -232,7 +236,7 @@ export async function PATCH(request: NextRequest) {
   } | null;
   const id = Number(body?.id);
   if (!Number.isInteger(id) || id < 1) return NextResponse.json({ ok: false, error: "Valid item id is required." }, { status: 400 });
-  const existing = await getOwnedShoppingList(weeklyPlanOwnerId(user), id);
+  const existing = await getOwnedShoppingList(householdUserIds, id);
   if (!existing) return NextResponse.json({ ok: false, error: "Shopping item not found." }, { status: 404 });
   const item = await prisma.shoppingListItem.update({
     where: { id },
@@ -251,9 +255,10 @@ export async function PATCH(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const user = await getRequestUser(request);
   if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  const householdUserIds = await getHouseholdUserIds(user.id);
   const id = Number(request.nextUrl.searchParams.get("id"));
   if (!Number.isInteger(id) || id < 1) return NextResponse.json({ ok: false, error: "Valid item id is required." }, { status: 400 });
-  const existing = await getOwnedShoppingList(weeklyPlanOwnerId(user), id);
+  const existing = await getOwnedShoppingList(householdUserIds, id);
   if (!existing) return NextResponse.json({ ok: false, error: "Shopping item not found." }, { status: 404 });
   await prisma.shoppingListItem.delete({ where: { id } });
   return NextResponse.json({ ok: true });
