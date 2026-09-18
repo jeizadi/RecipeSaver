@@ -128,62 +128,61 @@ export function SuggestionsPanel() {
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-end gap-3">
-        <label className="text-sm">
-          <span className="mb-1 block text-[#7f8c8d]">Suggestion count</span>
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-[#eadfca] bg-white p-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="text-sm">
+            <span className="mb-1 block text-slate-500">How many ideas?</span>
           <input
             type="number"
             min={4}
             max={20}
             value={limit}
             onChange={(e) => setLimit(Number(e.target.value))}
-            className="rounded border border-[#d2c2af] px-2 py-1"
+            className="w-24 rounded-xl border border-slate-200 px-3 py-2"
           />
-        </label>
-        <label className="flex items-center gap-2 text-sm">
+          </label>
+          <label className="flex items-center gap-2 pb-2 text-sm text-slate-700">
           <input
             type="checkbox"
             checked={includeWebCandidates}
             onChange={(e) => setIncludeWebCandidates(e.target.checked)}
           />
           Include open-web candidates
-        </label>
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={embeddingEnabled}
-            onChange={(e) => setEmbeddingEnabled(e.target.checked)}
-          />
-          Use embedding provider (feature-flag)
-        </label>
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={llmEnabled}
-            onChange={(e) => setLlmEnabled(e.target.checked)}
-          />
-          Use LLM rerank/explanations (feature-flag)
-        </label>
-        <button
-          type="button"
-          onClick={generate}
-          disabled={loading}
-          className="rounded bg-[#5b3b2a] px-3 py-2 text-sm font-medium text-white hover:bg-[#4b3022] disabled:opacity-60"
-        >
-          {loading ? "Generating..." : "Generate suggestions"}
-        </button>
-        <button
-          type="button"
-          onClick={refreshDiagnostics}
-          className="rounded border border-[#d2c2af] bg-white px-3 py-2 text-sm hover:bg-[#f6efe9]"
-        >
-          Refresh taste diagnostics
-        </button>
+          </label>
+          <button
+            type="button"
+            onClick={generate}
+            disabled={loading}
+            className="rounded-xl bg-[#f4a51c] px-4 py-2 text-sm font-semibold text-[#4a2b00] hover:bg-[#e39a0f] disabled:opacity-60"
+          >
+            {loading ? "Finding ideas…" : "Find recipes"}
+          </button>
+          <button
+            type="button"
+            onClick={refreshDiagnostics}
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-[#fff7e8]"
+          >
+            Refresh taste profile
+          </button>
+        </div>
+        <details className="mt-3 border-t border-slate-100 pt-3 text-sm">
+          <summary className="cursor-pointer text-slate-500">Advanced options</summary>
+          <div className="mt-3 flex flex-wrap gap-4 text-slate-600">
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={embeddingEnabled} onChange={(e) => setEmbeddingEnabled(e.target.checked)} />
+              Use embeddings
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={llmEnabled} onChange={(e) => setLlmEnabled(e.target.checked)} />
+              Use AI explanations
+            </label>
+          </div>
+        </details>
       </div>
-      {status && <p className="text-sm text-[#7f8c8d]">{status}</p>}
+      {status && <p className="rounded-xl bg-white px-4 py-3 text-sm text-slate-500">{status}</p>}
       {totals && (
-        <p className="text-xs text-[#5b3b2a]">
+        <p className="text-xs text-slate-500">
           Weekly suggestion cost estimate: $
           {((totals.estimatedWeeklyCostCents ?? 0) / 100).toFixed(2)}
           {totals.budgetTargetCents
@@ -192,34 +191,37 @@ export function SuggestionsPanel() {
         </p>
       )}
       {diagnostics && (
-        <div className="rounded border border-[#e0d4c7] bg-[#fffdf8] p-3 text-xs">
-          <p className="font-medium text-[#5b3b2a]">Taste diagnostics</p>
-          <p className="mt-1 text-[#7f8c8d]">
+        <div className="rounded-xl border border-[#eadfca] bg-[#fff7e8] p-3 text-xs">
+          <p className="font-medium text-[#4a2b00]">Taste profile</p>
+          <p className="mt-1 text-slate-500">
             Top ingredients:{" "}
             {diagnostics.topIngredients.slice(0, 6).map((x) => x.name).join(", ") || "—"}
           </p>
-          <p className="mt-1 text-[#7f8c8d]">
+          <p className="mt-1 text-slate-500">
             Top domains:{" "}
             {diagnostics.topDomains.slice(0, 5).map((x) => x.domain).join(", ") || "—"}
           </p>
         </div>
       )}
-      <ul className="space-y-2">
+      <ul className="grid gap-3 md:grid-cols-2">
         {suggestions.map((s) => (
-          <li key={`${s.rank}-${s.title}-${s.sourceUrl ?? ""}`} className="rounded border border-[#e0d4c7] bg-[#fffdf8] p-3">
-            <p className="font-medium">#{s.rank} {s.title}</p>
-            <p className="text-xs text-[#7f8c8d]">{s.sourceDomain || "unknown source"} · score {s.score.toFixed(2)}</p>
+          <li key={`${s.rank}-${s.title}-${s.sourceUrl ?? ""}`} className="rounded-2xl border border-[#eadfca] bg-white p-4">
+            <div className="flex items-start justify-between gap-3">
+              <p className="font-semibold text-slate-900">{s.title}</p>
+              <span className="rounded-full bg-[#fff0c7] px-2 py-1 text-xs font-medium text-[#8a5200]">#{s.rank}</span>
+            </div>
+            <p className="mt-1 text-xs text-slate-400">{s.sourceDomain || "unknown source"}</p>
             <div className="mt-1 flex flex-wrap gap-1 text-[11px]">
-              <span className="rounded bg-[#fdebd0] px-1.5 py-0.5">{s.lane.replace("_", " ")}</span>
-              <span className="rounded bg-[#eafaf1] px-1.5 py-0.5">
+              <span className="rounded-full bg-[#fff0c7] px-2 py-1 text-[#8a5200]">{s.lane.replace("_", " ")}</span>
+              <span className="rounded-full bg-[#f3f7ed] px-2 py-1 text-[#527044]">
                 fits budget {s.budgetImpact.fitScore.toFixed(2)}
               </span>
-              <span className="rounded bg-[#ebf5fb] px-1.5 py-0.5">
+              <span className="rounded-full bg-[#f1f3f5] px-2 py-1 text-slate-600">
                 similar {s.components.similarity.toFixed(2)}
               </span>
             </div>
-            <p className="mt-1 text-xs text-[#5b3b2a]">{s.reasons.join(" · ")}</p>
-            <div className="mt-2 flex flex-wrap gap-2 text-xs">
+            <p className="mt-3 text-sm text-slate-600">{s.reasons.join(" · ")}</p>
+            <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3 text-xs">
               {(() => {
                 const key = suggestionKey(s);
                 const active = feedbackByKey[key] ?? null;
