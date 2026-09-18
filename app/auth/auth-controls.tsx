@@ -43,7 +43,7 @@ export function AuthControls() {
 
   return (
     <div className="flex items-center gap-2">
-      <span className="text-xs text-[#7f8c8d]">{user.email}</span>
+      <span className="hidden text-xs text-[#7f8c8d] xl:inline">{user.email}</span>
       <button
         type="button"
         onClick={logout}

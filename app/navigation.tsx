@@ -75,9 +75,12 @@ export function Navigation() {
         title="Profile"
         aria-expanded={profileOpen}
         onClick={() => setProfileOpen((open) => !open)}
-        className={`ml-1 inline-flex h-9 w-9 items-center justify-center rounded-full border text-sm font-semibold ${profileOpen || isActive(pathname, "/profile") ? "border-[#f4b942] bg-[#fff0c7] text-[#8a5200]" : "border-[#eadfca] bg-white text-slate-600 hover:bg-[#fff0c7]"}`}
+        className={`ml-1 inline-flex h-8 w-8 items-center justify-center rounded-full border ${profileOpen || isActive(pathname, "/profile") ? "border-[#f4b942] bg-[#fff0c7] text-[#8a5200]" : "border-[#eadfca] bg-white text-slate-500 hover:bg-[#fff0c7]"}`}
       >
-        P
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.8">
+          <circle cx="12" cy="8" r="3.2" />
+          <path d="M5.5 19.2c.8-3.1 3.1-4.8 6.5-4.8s5.7 1.7 6.5 4.8" strokeLinecap="round" />
+        </svg>
       </button>
       {profileOpen && (
         <div role="dialog" aria-label="Profile menu" className="absolute right-4 top-16 z-20 w-64 rounded-2xl border border-[#eadfca] bg-[#fffdf8] p-4 shadow-lg">
