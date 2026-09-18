@@ -72,10 +72,11 @@ type Source = {
   servings: string;
 };
 
-export async function syncShoppingList(userId: number, weekStart: Date) {
+export async function syncShoppingList(userId: number | number[], weekStart: Date) {
+  const userIds = Array.isArray(userId) ? userId : [userId];
   const plans = await prisma.weeklyMealPlan.findMany({
     where: {
-      userId,
+      userId: { in: userIds },
       plannedFor: { gte: weekStart, lt: weekEndExclusive(weekStart) },
       status: { not: "skipped" },
     },
@@ -104,8 +105,8 @@ export async function syncShoppingList(userId: number, weekStart: Date) {
   }
 
   const list = await prisma.shoppingList.upsert({
-    where: { userId_weekStart: { userId, weekStart } },
-    create: { userId, weekStart },
+    where: { userId_weekStart: { userId: userIds[0], weekStart } },
+    create: { userId: userIds[0], weekStart },
     update: {},
   });
 
@@ -140,7 +141,7 @@ export async function syncShoppingList(userId: number, weekStart: Date) {
     : { shoppingListId: list.id, isManual: false };
   await prisma.shoppingListItem.deleteMany({ where: staleWhere });
 
-  const staples = await prisma.shoppingStaple.findMany({ where: { userId, active: true }, orderBy: { name: "asc" } });
+  const staples = await prisma.shoppingStaple.findMany({ where: { userId: { in: userIds }, active: true }, orderBy: { name: "asc" } });
   for (const staple of staples) {
     if (generatedKeys.includes(staple.nameKey)) continue;
     await prisma.shoppingListItem.upsert({
@@ -164,8 +165,9 @@ export async function syncShoppingList(userId: number, weekStart: Date) {
   });
 }
 
-export async function getOwnedShoppingList(userId: number, itemId: number) {
+export async function getOwnedShoppingList(userId: number | number[], itemId: number) {
+  const userIds = Array.isArray(userId) ? userId : [userId];
   return prisma.shoppingListItem.findFirst({
-    where: { id: itemId, shoppingList: { userId } },
+    where: { id: itemId, shoppingList: { userId: { in: userIds } } },
   });
 }

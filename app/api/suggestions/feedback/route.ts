@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { buildBehaviorStats, storeBehaviorStats } from "@/lib/suggestions/behavior";
 import { normalizeDomain } from "@/lib/suggestions/feature-extract";
-import { getRequestUser, recipeReadFilter } from "@/lib/access";
+import { getRequestUser, householdRecipeReadFilter } from "@/lib/access";
 
 const VALID_SIGNALS = new Set([
   "like",
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
       recipeId != null
         ? (
             await prisma.recipe.findFirst({
-              where: { id: recipeId, ...recipeReadFilter(user) },
+              where: { id: recipeId, ...await householdRecipeReadFilter(user) },
               select: { id: true },
             })
           )?.id ?? null

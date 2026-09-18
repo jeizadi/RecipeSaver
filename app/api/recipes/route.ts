@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getRequestUser, recipeOwnerId, recipeReadFilter } from "@/lib/access";
+import { getRequestUser, householdRecipeReadFilter, recipeOwnerId } from "@/lib/access";
 
 const CATEGORIES = [
   "breakfast",
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
     const pageSize = 20;
 
-    const where: Record<string, unknown> = { ...recipeReadFilter(user) };
+    const where: Record<string, unknown> = { ...await householdRecipeReadFilter(user) };
     if (q) where.title = { contains: q, mode: "insensitive" };
     if (ingredient)
       where.ingredientsText = { contains: ingredient, mode: "insensitive" };

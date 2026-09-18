@@ -91,8 +91,39 @@ model AppUser {
   preferenceVector UserPreferenceVector?
   shoppingLists ShoppingList[]
   shoppingStaples ShoppingStaple[]
+  householdMemberships HouseholdMember[]
 
   @@map("app_users")
+}
+
+enum HouseholdRole {
+  owner
+  member
+}
+
+model Household {
+  id        Int               @id @default(autoincrement())
+  name      String            @default("Our kitchen")
+  createdAt DateTime          @default(now()) @map("created_at")
+  updatedAt DateTime          @updatedAt @map("updated_at")
+  members   HouseholdMember[]
+
+  @@map("households")
+}
+
+model HouseholdMember {
+  id          Int          @id @default(autoincrement())
+  householdId Int          @map("household_id")
+  household   Household    @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  userId      Int          @map("user_id")
+  user        AppUser      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        HouseholdRole @default(member)
+  invitedEmail String?      @map("invited_email")
+  createdAt   DateTime     @default(now()) @map("created_at")
+
+  @@unique([householdId, userId])
+  @@index([userId])
+  @@map("household_members")
 }
 
 model UserSession {

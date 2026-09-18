@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { recipeReadFilter, weeklyPlanReadFilter } from "@/lib/access";
+import { householdRecipeReadFilter, householdWeeklyPlanReadFilter } from "@/lib/access";
 import { requireUser } from "@/lib/require-user";
 import { WeeklyPlannerPageClient } from "./weekly-planner-page-client";
 
@@ -23,13 +23,13 @@ export default async function WeeklyPage() {
 
   const [recipes, items] = await Promise.all([
     prisma.recipe.findMany({
-      where: recipeReadFilter(user),
+      where: await householdRecipeReadFilter(user),
       orderBy: { title: "asc" },
       select: { id: true, title: true, category: true },
     }),
     prisma.weeklyMealPlan.findMany({
       where: {
-        ...weeklyPlanReadFilter(user),
+        ...await householdWeeklyPlanReadFilter(user),
         plannedFor: {
           gte: weekStart,
           lte: weekEnd,

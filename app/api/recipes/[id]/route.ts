@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getRequestUser, recipeReadFilter } from "@/lib/access";
+import { getRequestUser, householdRecipeReadFilter } from "@/lib/access";
 
 const CATEGORIES = [
   "breakfast",
@@ -30,7 +30,7 @@ export async function GET(
     return NextResponse.json({ error: "Invalid id" }, { status: 400 });
   }
   try {
-    const recipe = await prisma.recipe.findFirst({ where: { id, ...recipeReadFilter(user) } });
+    const recipe = await prisma.recipe.findFirst({ where: { id, ...await householdRecipeReadFilter(user) } });
     if (!recipe) {
       return NextResponse.json({ error: "Recipe not found" }, { status: 404 });
     }
@@ -102,7 +102,7 @@ export async function PATCH(
     }
     if (tags !== undefined) data.tags = String(tags).trim();
 
-    const recipe = await prisma.recipe.findFirst({ where: { id, ...recipeReadFilter(user) } });
+    const recipe = await prisma.recipe.findFirst({ where: { id, ...await householdRecipeReadFilter(user) } });
     if (!recipe) return NextResponse.json({ error: "Recipe not found" }, { status: 404 });
     const updated = await prisma.recipe.update({
       where: { id },
@@ -132,7 +132,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Invalid id" }, { status: 400 });
   }
   try {
-    const recipe = await prisma.recipe.findFirst({ where: { id, ...recipeReadFilter(user) } });
+    const recipe = await prisma.recipe.findFirst({ where: { id, ...await householdRecipeReadFilter(user) } });
     if (!recipe) return NextResponse.json({ error: "Recipe not found" }, { status: 404 });
     await prisma.recipe.delete({ where: { id } });
     return new NextResponse(null, { status: 204 });

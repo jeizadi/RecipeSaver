@@ -2,7 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { WeeklyPlannerClient } from "./weekly-planner-client";
 import { AUTH_ENABLED } from "@/lib/auth-config";
-import { recipeReadFilter } from "@/lib/access";
+import { householdRecipeReadFilter } from "@/lib/access";
 import { requireUser } from "@/lib/require-user";
 import { HomeFeaturedSuggestions } from "./home-featured-suggestions";
 
@@ -42,7 +42,7 @@ export default async function HomePage({
   });
 
   try {
-    const where: Record<string, unknown> = { ...recipeReadFilter(user) };
+    const where: Record<string, unknown> = { ...await householdRecipeReadFilter(user) };
     if (q) where.title = { contains: q, mode: "insensitive" };
     if (ingredient) where.ingredientsText = { contains: ingredient, mode: "insensitive" };
     if (category) where.category = category;
@@ -64,7 +64,7 @@ export default async function HomePage({
 
   let allRecipesCount = recipes.length;
   if (q || ingredient || category) {
-    allRecipesCount = await prisma.recipe.count({ where: recipeReadFilter(user) });
+    allRecipesCount = await prisma.recipe.count({ where: await householdRecipeReadFilter(user) });
   }
 
   function categoryLabel(cat: string) {

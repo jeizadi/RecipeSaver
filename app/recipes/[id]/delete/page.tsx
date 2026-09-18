@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { DeleteForm } from "./delete-form";
-import { recipeReadFilter } from "@/lib/access";
+import { householdRecipeReadFilter } from "@/lib/access";
 import { requireUser } from "@/lib/require-user";
 
 export default async function DeleteRecipePage({
@@ -13,7 +13,7 @@ export default async function DeleteRecipePage({
   const user = await requireUser();
   const id = parseInt((await params).id, 10);
   if (!Number.isFinite(id)) redirect("/");
-  const recipe = await prisma.recipe.findFirst({ where: { id, ...recipeReadFilter(user) } });
+  const recipe = await prisma.recipe.findFirst({ where: { id, ...await householdRecipeReadFilter(user) } });
   if (!recipe) redirect("/");
 
   return (
