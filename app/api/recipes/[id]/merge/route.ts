@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { appendMergedRecipeBlocks } from "@/lib/merge-recipe-text";
-import { getRequestUser, recipeReadFilter } from "@/lib/access";
+import { getRequestUser, householdRecipeReadFilter } from "@/lib/access";
 
 function parseId(id: string): number | null {
   const n = parseInt(id, 10);
@@ -57,14 +57,14 @@ export async function POST(
 
   try {
     const parent = await prisma.recipe.findFirst({
-      where: { id: parentId, ...recipeReadFilter(user) },
+      where: { id: parentId, ...await householdRecipeReadFilter(user) },
       select: { id: true },
     });
     if (!parent) {
       return NextResponse.json({ error: "Recipe not found" }, { status: 404 });
     }
 
-    const child = await prisma.recipe.findFirst({ where: { id: childId, ...recipeReadFilter(user) } });
+    const child = await prisma.recipe.findFirst({ where: { id: childId, ...await householdRecipeReadFilter(user) } });
     if (!child) {
       return NextResponse.json(
         { error: "Recipe to merge was not found" },

@@ -3,6 +3,7 @@ import type { AppUser } from "@prisma/client";
 import { AUTH_ENABLED } from "@/lib/auth-config";
 import { getCurrentUser, getCurrentUserFromRequest } from "@/lib/auth";
 import { getSharedWorkspaceUser } from "@/lib/shared-user";
+import { getHouseholdUserIds } from "@/lib/households";
 
 export async function getRequestUser(request: NextRequest) {
   if (!AUTH_ENABLED) return getSharedWorkspaceUser();
@@ -19,9 +20,19 @@ export function recipeReadFilter(user: AppUser) {
   return AUTH_ENABLED ? { userId: user.id } : {};
 }
 
+export async function householdRecipeReadFilter(user: AppUser) {
+  if (!AUTH_ENABLED) return {};
+  return { userId: { in: await getHouseholdUserIds(user.id) } };
+}
+
 /** Scope weekly-plan reads the same way. */
 export function weeklyPlanReadFilter(user: AppUser) {
   return AUTH_ENABLED ? { userId: user.id } : {};
+}
+
+export async function householdWeeklyPlanReadFilter(user: AppUser) {
+  if (!AUTH_ENABLED) return {};
+  return { userId: { in: await getHouseholdUserIds(user.id) } };
 }
 
 export function recipeOwnerId(user: AppUser): number | null {

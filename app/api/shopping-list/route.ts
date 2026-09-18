@@ -7,7 +7,7 @@ import {
 import { importRecipeFromUrl } from "@/lib/import-recipe";
 import { parseBaseServings, scaleIngredientsText } from "@/lib/ingredient-scale";
 import { refineAggregatedItemsWithLlm } from "@/lib/shopping-list-llm";
-import { getRequestUser, recipeReadFilter } from "@/lib/access";
+import { getRequestUser, householdRecipeReadFilter } from "@/lib/access";
 import { getHouseholdUserIds } from "@/lib/households";
 import {
   categoryForIngredient,
@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
 
     if (recipeIds.length) {
       const recipes = await prisma.recipe.findMany({
-        where: { id: { in: recipeIds }, ...recipeReadFilter(user) },
+        where: { id: { in: recipeIds }, ...await householdRecipeReadFilter(user) },
         select: {
           id: true,
           title: true,

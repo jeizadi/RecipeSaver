@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getRequestUser, recipeReadFilter } from "@/lib/access";
+import { getRequestUser, householdRecipeReadFilter } from "@/lib/access";
 import {
   collectUrlsFromIngredientsText,
   extractSamePageWprmRecipeSiblings,
@@ -157,8 +157,8 @@ export async function POST(request: NextRequest) {
   const allRecipes = await prisma.recipe.findMany({
     where:
       excludeId != null
-        ? { ...recipeReadFilter(user), id: { not: excludeId } }
-        : recipeReadFilter(user),
+        ? { ...await householdRecipeReadFilter(user), id: { not: excludeId } }
+        : await householdRecipeReadFilter(user),
     select: { id: true, title: true, sourceUrl: true },
   });
 
