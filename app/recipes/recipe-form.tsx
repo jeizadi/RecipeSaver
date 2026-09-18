@@ -58,16 +58,20 @@ const emptyInitial: RecipeFormInitial = {
 export function RecipeForm({
   recipeId,
   initial = emptyInitial,
+  autoImport = false,
 }: {
   recipeId?: number;
   initial?: RecipeFormInitial;
+  autoImport?: boolean;
 }) {
   const router = useRouter();
   const [status, setStatus] = useState("");
   const [statusError, setStatusError] = useState(false);
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [importAttempted, setImportAttempted] = useState(false);
   const [linkHintsScanNonce, setLinkHintsScanNonce] = useState(0);
+  const autoImportRanRef = useRef(false);
 
   const [form, setForm] = useState(initial);
   const ingredientsCopy = useClipboardCopyWithUndo(form.ingredientsText);
@@ -94,7 +98,7 @@ export function RecipeForm({
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  async function handleImport() {
+  const handleImport = useCallback(async () => {
     const url = form.sourceUrl.trim();
     if (!url) {
       setStatus("Paste a recipe URL first.");
@@ -104,6 +108,7 @@ export function RecipeForm({
     setStatus("Importing…");
     setStatusError(false);
     setImporting(true);
+    setImportAttempted(true);
     try {
       const res = await fetch("/api/recipes/import", {
         method: "POST",
@@ -134,12 +139,18 @@ export function RecipeForm({
       setStatus("Imported! Review and click Save.");
       setStatusError(false);
     } catch {
-      setStatus("Import failed. Try again or fill manually.");
+      setStatus("Automatic import failed. Try Re-import or fill the recipe in manually.");
       setStatusError(true);
     } finally {
       setImporting(false);
     }
-  }
+  }, [form.sourceUrl]);
+
+  useEffect(() => {
+    if (!autoImport || !initial.sourceUrl || autoImportRanRef.current) return;
+    autoImportRanRef.current = true;
+    void handleImport();
+  }, [autoImport, handleImport, initial.sourceUrl]);
 
   async function handleMergeLinkedFromUrl(
     url: string
@@ -257,7 +268,7 @@ export function RecipeForm({
             disabled={importing}
             className="rounded border border-[#d2c2af] bg-white px-3 py-1.5 text-sm hover:bg-[#f6efe9] disabled:opacity-70"
           >
-            Import
+            {importing ? "Importing…" : importAttempted ? "Re-import" : "Import"}
           </button>
         </div>
         {status && (

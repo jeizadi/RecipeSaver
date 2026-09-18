@@ -93,11 +93,11 @@ export function MergeRecipePanel({
   }
 
   return (
-    <div className="rounded border border-[#e0d4c7] bg-[#fffdf8] p-4">
-      <h3 className="mb-1 text-sm font-semibold text-[#5b3b2a]">
+    <div className="rounded-2xl border border-[#eadfca] bg-white p-4">
+      <h3 className="mb-1 text-sm font-semibold text-slate-900">
         Merge another recipe into this one
       </h3>
-      <p className="mb-3 text-xs text-[#7f8c8d]">
+      <p className="mb-3 text-xs text-slate-500">
         Pick a recipe (e.g. a sauce). Its ingredients and instructions are
         appended to this recipe so you can keep one combined dish. Save when
         you’re happy with the text.

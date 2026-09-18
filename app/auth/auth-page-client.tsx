@@ -36,15 +36,16 @@ export default function AuthPageClient() {
   }
 
   return (
-    <div className="mx-auto max-w-md rounded-lg bg-white p-6 shadow-sm">
-      <h2 className="mb-4 text-xl font-semibold">{mode === "login" ? "Login" : "Create account"}</h2>
+    <div className="mx-auto max-w-md rounded-2xl border border-[#eadfca] bg-[#fffdf8] p-6 shadow-none sm:p-8">
+      <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#b66a00]">Recipebox</p>
+      <h2 className="mt-1 mb-5 text-3xl font-semibold tracking-tight text-slate-950">{mode === "login" ? "Welcome back" : "Create your account"}</h2>
       <div className="space-y-3">
         {mode === "signup" && (
           <input className="w-full rounded border border-[#d2c2af] px-3 py-2 text-sm" placeholder="Name (optional)" value={name} onChange={(e) => setName(e.target.value)} />
         )}
         <input className="w-full rounded border border-[#d2c2af] px-3 py-2 text-sm" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
         <input type="password" className="w-full rounded border border-[#d2c2af] px-3 py-2 text-sm" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
-        <button onClick={submit} disabled={loading} className="w-full rounded bg-[#e67e22] px-3 py-2 text-sm font-medium text-white hover:bg-[#cf711f] disabled:opacity-60">
+        <button onClick={submit} disabled={loading} className="w-full rounded-xl bg-[#f4a51c] px-3 py-2 text-sm font-semibold text-[#4a2b00] hover:bg-[#e39a0f] disabled:opacity-60">
           {loading ? "Please wait..." : mode === "login" ? "Login" : "Sign up"}
         </button>
         <button

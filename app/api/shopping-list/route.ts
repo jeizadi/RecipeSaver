@@ -7,15 +7,37 @@ import {
 import { importRecipeFromUrl } from "@/lib/import-recipe";
 import { parseBaseServings, scaleIngredientsText } from "@/lib/ingredient-scale";
 import { refineAggregatedItemsWithLlm } from "@/lib/shopping-list-llm";
-import { getRequestUser, recipeReadFilter } from "@/lib/access";
+import { getRequestUser, recipeReadFilter, weeklyPlanOwnerId } from "@/lib/access";
+import {
+  categoryForIngredient,
+  getOwnedShoppingList,
+  normalizeShoppingName,
+  parseWeekStart,
+  SHOPPING_CATEGORIES,
+  syncShoppingList,
+} from "@/lib/shopping-list";
 
 type RequestBody = {
+  action?: "sync" | "add";
+  weekStart?: string;
+  name?: string;
+  quantity?: string;
+  category?: string;
+  saveAsStaple?: boolean;
   recipeIds?: number[];
   sauceUrls?: string[];
   /** When true and GEMINI_API_KEY or OPENAI_API_KEY is set, run an optional LLM merge pass */
   useAiMerge?: boolean;
   plannedServingsByRecipe?: Record<string, number>;
 };
+
+export async function GET(request: NextRequest) {
+  const user = await getRequestUser(request);
+  if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  const weekStart = parseWeekStart(request.nextUrl.searchParams.get("weekStart"));
+  const list = await syncShoppingList(weeklyPlanOwnerId(user), weekStart);
+  return NextResponse.json({ ok: true, weekStart: weekStart.toISOString().slice(0, 10), list });
+}
 
 export async function POST(request: NextRequest) {
   const user = await getRequestUser(request);
@@ -30,6 +52,48 @@ export async function POST(request: NextRequest) {
       { ok: false, error: "Invalid JSON body" },
       { status: 400 }
     );
+  }
+
+  if (body.action === "sync") {
+    const weekStart = parseWeekStart(body.weekStart);
+    const list = await syncShoppingList(weeklyPlanOwnerId(user), weekStart);
+    return NextResponse.json({ ok: true, weekStart: weekStart.toISOString().slice(0, 10), list });
+  }
+
+  if (body.action === "add") {
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    if (!name) return NextResponse.json({ ok: false, error: "Item name is required." }, { status: 400 });
+    const category = SHOPPING_CATEGORIES.includes(body.category as (typeof SHOPPING_CATEGORIES)[number])
+      ? body.category!
+      : categoryForIngredient(name);
+    const weekStart = parseWeekStart(body.weekStart);
+    const list = await prisma.shoppingList.upsert({
+      where: { userId_weekStart: { userId: weeklyPlanOwnerId(user), weekStart } },
+      create: { userId: weeklyPlanOwnerId(user), weekStart },
+      update: {},
+    });
+    const nameKey = normalizeShoppingName(name);
+    const item = await prisma.shoppingListItem.upsert({
+      where: { shoppingListId_nameKey: { shoppingListId: list.id, nameKey } },
+      create: {
+        shoppingListId: list.id,
+        nameKey,
+        name,
+        quantity: body.quantity?.trim() ?? "",
+        category,
+        isManual: true,
+        sourceLabels: JSON.stringify(["Added manually"]),
+      },
+      update: { name, quantity: body.quantity?.trim() ?? "", category, isManual: true },
+    });
+    if (body.saveAsStaple) {
+      await prisma.shoppingStaple.upsert({
+        where: { userId_nameKey: { userId: weeklyPlanOwnerId(user), nameKey } },
+        create: { userId: weeklyPlanOwnerId(user), name, nameKey, quantity: body.quantity?.trim() ?? "", category },
+        update: { name, quantity: body.quantity?.trim() ?? "", category, active: true },
+      });
+    }
+    return NextResponse.json({ ok: true, item });
   }
 
   const recipeIds =
@@ -156,3 +220,41 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export async function PATCH(request: NextRequest) {
+  const user = await getRequestUser(request);
+  if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  const body = (await request.json().catch(() => null)) as {
+    id?: number;
+    checked?: boolean;
+    name?: string;
+    quantity?: string;
+    category?: string;
+  } | null;
+  const id = Number(body?.id);
+  if (!Number.isInteger(id) || id < 1) return NextResponse.json({ ok: false, error: "Valid item id is required." }, { status: 400 });
+  const existing = await getOwnedShoppingList(weeklyPlanOwnerId(user), id);
+  if (!existing) return NextResponse.json({ ok: false, error: "Shopping item not found." }, { status: 404 });
+  const item = await prisma.shoppingListItem.update({
+    where: { id },
+    data: {
+      ...(typeof body?.checked === "boolean" ? { checked: body.checked } : {}),
+      ...(typeof body?.name === "string" && body.name.trim() ? { name: body.name.trim() } : {}),
+      ...(typeof body?.quantity === "string" ? { quantity: body.quantity.trim() } : {}),
+      ...(typeof body?.category === "string" && SHOPPING_CATEGORIES.includes(body.category as (typeof SHOPPING_CATEGORIES)[number])
+        ? { category: body.category }
+        : {}),
+    },
+  });
+  return NextResponse.json({ ok: true, item });
+}
+
+export async function DELETE(request: NextRequest) {
+  const user = await getRequestUser(request);
+  if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  const id = Number(request.nextUrl.searchParams.get("id"));
+  if (!Number.isInteger(id) || id < 1) return NextResponse.json({ ok: false, error: "Valid item id is required." }, { status: 400 });
+  const existing = await getOwnedShoppingList(weeklyPlanOwnerId(user), id);
+  if (!existing) return NextResponse.json({ ok: false, error: "Shopping item not found." }, { status: 404 });
+  await prisma.shoppingListItem.delete({ where: { id } });
+  return NextResponse.json({ ok: true });
+}
