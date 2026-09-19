@@ -66,34 +66,40 @@ export async function POST(request: NextRequest) {
   if (body.action === "add") {
     const name = typeof body.name === "string" ? body.name.trim() : "";
     if (!name) return NextResponse.json({ ok: false, error: "Item name is required." }, { status: 400 });
+    const normalized = consolidateIngredients([{ ingredientsText: name }])[0];
+    const normalizedLine = normalized ? formatAggregatedForClipboard([normalized]) : name;
+    const normalizedName = normalized?.displayName ?? name;
+    const normalizedQuantity = normalized
+      ? normalizedLine.replace(new RegExp(`${normalizedName}s?$`, "i"), "").trim()
+      : body.quantity?.trim() ?? "";
     const category = SHOPPING_CATEGORIES.includes(body.category as (typeof SHOPPING_CATEGORIES)[number])
       ? body.category!
-      : categoryForIngredient(name);
+      : categoryForIngredient(normalizedName);
     const weekStart = parseWeekStart(body.weekStart);
     const list = await prisma.shoppingList.upsert({
       where: { userId_weekStart: { userId: householdUserIds[0], weekStart } },
       create: { userId: householdUserIds[0], weekStart },
       update: {},
     });
-    const nameKey = normalizeShoppingName(name);
+    const nameKey = normalized?.nameKey ?? normalizeShoppingName(normalizedName);
     const item = await prisma.shoppingListItem.upsert({
       where: { shoppingListId_nameKey: { shoppingListId: list.id, nameKey } },
       create: {
         shoppingListId: list.id,
         nameKey,
-        name,
-        quantity: body.quantity?.trim() ?? "",
+        name: normalizedName,
+        quantity: normalizedQuantity || body.quantity?.trim() || "",
         category,
         isManual: true,
         sourceLabels: JSON.stringify(["Added manually"]),
       },
-      update: { name, quantity: body.quantity?.trim() ?? "", category, isManual: true },
+      update: { name: normalizedName, quantity: normalizedQuantity || body.quantity?.trim() || "", category, isManual: true },
     });
     if (body.saveAsStaple) {
       await prisma.shoppingStaple.upsert({
         where: { userId_nameKey: { userId: householdUserIds[0], nameKey } },
-        create: { userId: householdUserIds[0], name, nameKey, quantity: body.quantity?.trim() ?? "", category },
-        update: { name, quantity: body.quantity?.trim() ?? "", category, active: true },
+        create: { userId: householdUserIds[0], name: normalizedName, nameKey, quantity: normalizedQuantity || body.quantity?.trim() || "", category },
+        update: { name: normalizedName, quantity: normalizedQuantity || body.quantity?.trim() || "", category, active: true },
       });
     }
     return NextResponse.json({ ok: true, item });

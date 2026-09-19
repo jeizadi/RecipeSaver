@@ -619,7 +619,7 @@ export function consolidateIngredients(
     }
   }
 
-  const items = Array.from(byKey.values());
+  const items = Array.from(byKey.values()).map(convertProduceJuice);
   items.sort((a, b) => a.displayName.localeCompare(b.displayName));
   return items;
 }
@@ -689,6 +689,26 @@ function roundCupToEighthString(cups: number): string {
 }
 
 const CUP_PLURAL_EPS = 1e-6;
+
+/** Typical juice yields used to turn recipe volume into practical produce purchases. */
+const PRODUCE_JUICE_YIELDS: Array<{ pattern: RegExp; fruit: string; tablespoons: number }> = [
+  { pattern: /juicelime/, fruit: "lime", tablespoons: 2 },
+  { pattern: /juicelemon/, fruit: "lemon", tablespoons: 3 },
+  { pattern: /juiceorange/, fruit: "orange", tablespoons: 4 },
+];
+
+function convertProduceJuice(item: AggregatedIngredient): AggregatedIngredient {
+  if (item.unit !== "cup" || item.totalQuantity == null) return item;
+  const match = PRODUCE_JUICE_YIELDS.find(({ pattern }) => pattern.test(item.nameKey));
+  if (!match) return item;
+  const tablespoons = item.totalQuantity * 16;
+  return {
+    ...item,
+    displayName: match.fruit,
+    unit: match.fruit,
+    totalQuantity: Math.max(1, Math.ceil(tablespoons / match.tablespoons)),
+  };
+}
 
 function cupUnitWord(cups: number): "cup" | "cups" {
   if (!Number.isFinite(cups)) return "cup";
@@ -794,17 +814,21 @@ export function formatAggregatedForClipboard(items: AggregatedIngredient[]): str
     if (item.unit && item.unit !== "cup") {
       const u =
         item.totalQuantity != null && item.totalQuantity > 1
-          ? item.unit === "head"
-            ? "heads"
-            : item.unit === "can"
-              ? "cans"
-              : item.unit
+            ? item.unit === "head"
+              ? "heads"
+              : item.unit === "can"
+                ? "cans"
+                : item.unit === "lime" || item.unit === "lemon" || item.unit === "orange"
+                  ? `${item.unit}s`
+                : item.unit
           : item.unit;
       parts.push(u);
     } else if (!item.totalQuantity && item.unit === "cup") {
       parts.push("cup");
     }
-    parts.push(item.displayName);
+    if (!(item.unit && ["lime", "lemon", "orange"].includes(item.unit) && item.displayName === item.unit)) {
+      parts.push(item.displayName);
+    }
     const line = parts.join(" ").trim();
     if (line) {
       lines.push(line);
@@ -819,4 +843,3 @@ export function formatAggregatedForClipboard(items: AggregatedIngredient[]): str
   }
   return lines.join("\n");
 }
-

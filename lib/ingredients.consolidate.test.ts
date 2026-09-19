@@ -174,6 +174,17 @@ describe("consolidateIngredients", () => {
     expect(salt!.unit).toBe("cup");
     expect(salt!.totalQuantity).toBeCloseTo(2.75 / 48, 10);
   });
+
+  it("turns lime juice into a practical lime estimate", () => {
+    const items = consolidateIngredients([
+      { ingredientsText: "1/3 cup lime juice" },
+    ]);
+    expect(items).toHaveLength(1);
+    expect(items[0].displayName).toBe("lime");
+    expect(items[0].unit).toBe("lime");
+    expect(items[0].totalQuantity).toBe(3);
+    expect(formatAggregatedForClipboard(items)).toBe("3 limes");
+  });
 });
 
 describe("formatAggregatedForClipboard", () => {
