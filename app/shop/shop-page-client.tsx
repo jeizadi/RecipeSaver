@@ -175,7 +175,7 @@ export function ShopPageClient() {
   async function copyForGoogleKeep() {
     const lines = grouped.flatMap(({ category, items: categoryItems }) => [
       `${CATEGORY_LABELS[category] ?? category}`,
-      ...categoryItems.map((item) => `${item.checked ? "☑" : "☐"} ${item.quantity ? `${item.quantity} ` : ""}${item.name}`),
+      ...categoryItems.filter((item) => !item.checked).map((item) => `${item.quantity ? `${item.quantity} ` : ""}${item.name}`),
       "",
     ]);
     try {
