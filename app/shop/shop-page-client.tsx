@@ -173,11 +173,11 @@ export function ShopPageClient() {
   }
 
   async function copyForGoogleKeep() {
-    const lines = grouped.flatMap(({ category, items: categoryItems }) => [
-      `${CATEGORY_LABELS[category] ?? category}`,
-      ...categoryItems.filter((item) => !item.checked).map((item) => `${item.quantity ? `${item.quantity} ` : ""}${item.name}`),
-      "",
-    ]);
+    const lines = grouped.flatMap(({ items: categoryItems }) =>
+      categoryItems
+        .filter((item) => !item.checked)
+        .map((item) => `${item.quantity ? `${item.quantity} ` : ""}${item.name}`)
+    );
     try {
       await navigator.clipboard.writeText(lines.join("\n").trim());
       setStatus("Copied your checklist. Paste it into a Google Keep note.");
