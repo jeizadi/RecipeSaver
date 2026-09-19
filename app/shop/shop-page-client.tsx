@@ -172,6 +172,20 @@ export function ShopPageClient() {
     setBusy(false);
   }
 
+  async function copyForGoogleKeep() {
+    const lines = grouped.flatMap(({ category, items: categoryItems }) => [
+      `${CATEGORY_LABELS[category] ?? category}`,
+      ...categoryItems.map((item) => `${item.checked ? "☑" : "☐"} ${item.quantity ? `${item.quantity} ` : ""}${item.name}`),
+      "",
+    ]);
+    try {
+      await navigator.clipboard.writeText(lines.join("\n").trim());
+      setStatus("Copied your checklist. Paste it into a Google Keep note.");
+    } catch {
+      setStatus("Could not copy the checklist. Check your browser permissions.");
+    }
+  }
+
   return (
     <div className="mx-auto max-w-3xl space-y-4 pb-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -196,6 +210,7 @@ export function ShopPageClient() {
           </div>
           <div className="flex gap-2">
             <Button type="button" variant="ghost" onClick={() => void regenerate()} disabled={busy}>Refresh</Button>
+            <Button type="button" variant="ghost" onClick={() => void copyForGoogleKeep()} disabled={!items.length}>Copy for Keep</Button>
             <Link href="/weekly" className="inline-flex min-h-10 items-center rounded-xl bg-[#fff0c7] px-3 py-2 text-sm font-medium text-[#8a5200] hover:bg-[#ffe6a3]">Plan meals</Link>
           </div>
         </div>
