@@ -80,18 +80,40 @@ export async function syncShoppingList(userId: number | number[], weekStart: Dat
       plannedFor: { gte: weekStart, lt: weekEndExclusive(weekStart) },
       status: { not: "skipped" },
     },
-    include: { recipe: { select: { id: true, title: true, ingredientsText: true, servings: true } } },
+    include: {
+      recipe: {
+        select: {
+          id: true,
+          title: true,
+          ingredientsText: true,
+          servings: true,
+          parentComponents: {
+            where: { includedByDefault: true },
+            orderBy: { sortOrder: "asc" },
+            include: { childRecipe: { select: { id: true, title: true, ingredientsText: true, servings: true } } },
+          },
+        },
+      },
+    },
     orderBy: { plannedFor: "asc" },
   });
 
-  const sources: Source[] = plans
-    .filter((plan) => plan.recipe.ingredientsText.trim())
-    .map((plan) => ({
-      recipeId: plan.recipe.id,
-      title: plan.recipe.title,
-      ingredientsText: plan.recipe.ingredientsText,
-      servings: plan.recipe.servings,
-    }));
+  const sources: Source[] = plans.flatMap((plan) => {
+    const sourcesForPlan: Source[] = plan.recipe.ingredientsText.trim()
+      ? [{ recipeId: plan.recipe.id, title: plan.recipe.title, ingredientsText: plan.recipe.ingredientsText, servings: plan.recipe.servings }]
+      : [];
+    for (const component of plan.recipe.parentComponents) {
+      if (component.childRecipe.ingredientsText.trim()) {
+        sourcesForPlan.push({
+          recipeId: component.childRecipe.id,
+          title: `${plan.recipe.title} · ${component.label || component.childRecipe.title}`,
+          ingredientsText: component.childRecipe.ingredientsText,
+          servings: component.childRecipe.servings,
+        });
+      }
+    }
+    return sourcesForPlan;
+  });
 
   const aggregates = consolidateIngredients(sources);
   const sourceByKey = new Map<string, { ids: number[]; labels: string[] }>();
