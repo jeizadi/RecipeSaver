@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import { Navigation } from "./navigation";
 import "./globals.css";
@@ -6,6 +6,11 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Recipebox – Weekly shopping",
   description: "Plan meals, build a shopping list, and save recipes",
+};
+
+export const viewport: Viewport = {
+  themeColor: "#f4a51c",
+  colorScheme: "light",
 };
 
 export default function RootLayout({
