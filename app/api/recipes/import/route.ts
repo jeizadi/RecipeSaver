@@ -41,6 +41,7 @@ export async function POST(request: NextRequest) {
         imageUrl: imported.imageUrl,
         author: imported.author,
         category: imported.category,
+        cuisine: imported.cuisine,
       },
     });
   } catch (err) {

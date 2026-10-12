@@ -33,6 +33,7 @@ export default async function EditRecipePage({
           imageUrl: recipe.imageUrl,
           author: recipe.author,
           category: recipe.category,
+          cuisine: recipe.cuisine,
           tags: recipe.tags,
         }}
       />

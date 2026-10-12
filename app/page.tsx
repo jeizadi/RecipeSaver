@@ -24,13 +24,14 @@ export const dynamic = "force-dynamic";
 export default async function HomePage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; ingredient?: string; category?: string }>;
+  searchParams: Promise<{ q?: string; ingredient?: string; category?: string; cuisine?: string }>;
 }) {
   const user = await requireUser();
   const params = await searchParams;
   const q = params.q?.trim() ?? "";
   const ingredient = params.ingredient?.trim() ?? "";
   const category = params.category?.trim() ?? "";
+  const cuisine = params.cuisine?.trim() ?? "";
 
   let recipes: Awaited<ReturnType<typeof prisma.recipe.findMany>>;
   const featured = await prisma.suggestionItem.findMany({
@@ -46,6 +47,7 @@ export default async function HomePage({
     if (q) where.title = { contains: q, mode: "insensitive" };
     if (ingredient) where.ingredientsText = { contains: ingredient, mode: "insensitive" };
     if (category) where.category = category;
+    if (cuisine) where.cuisine = { contains: cuisine, mode: "insensitive" };
     recipes = await prisma.recipe.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -63,7 +65,7 @@ export default async function HomePage({
   }
 
   let allRecipesCount = recipes.length;
-  if (q || ingredient || category) {
+  if (q || ingredient || category || cuisine) {
     allRecipesCount = await prisma.recipe.count({ where: await householdRecipeReadFilter(user) });
   }
 
@@ -108,12 +110,16 @@ export default async function HomePage({
               ))}
             </select>
           </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-sm font-medium">Cuisine</span>
+            <input type="text" name="cuisine" defaultValue={cuisine} placeholder="e.g. Thai" className="rounded border border-[#d2c2af] px-2 py-1.5 text-sm" />
+          </label>
           <button type="submit" className="rounded-xl bg-[#f4a51c] px-3 py-2 text-sm font-semibold text-[#4a2b00] hover:bg-[#e39a0f]">Search</button>
-          {(q || ingredient || category) && (
+          {(q || ingredient || category || cuisine) && (
             <Link href="/" className="text-sm underline">Clear</Link>
           )}
         </form>
-        {(q || ingredient || category) && (
+        {(q || ingredient || category || cuisine) && (
           <p className="mt-2 text-sm text-[#7f8c8d]">
             Showing {recipes.length} matching recipes{allRecipesCount ? ` out of ${allRecipesCount}` : ""}.
           </p>

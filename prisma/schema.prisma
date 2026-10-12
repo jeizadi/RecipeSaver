@@ -26,6 +26,7 @@ model Recipe {
   imageUrl           String    @default("") @map("image_url")
   author             String    @default("") @map("author")
   category           String    @default("other")
+  cuisine            String    @default("")
   tags               String    @default("") @map("tags")
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")

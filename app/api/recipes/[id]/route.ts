@@ -69,6 +69,7 @@ export async function PATCH(
       imageUrl,
       author,
       category,
+      cuisine,
       tags,
     } = body;
 
@@ -101,6 +102,7 @@ export async function PATCH(
       data.category = category;
     }
     if (tags !== undefined) data.tags = String(tags).trim();
+    if (cuisine !== undefined) data.cuisine = String(cuisine).trim();
 
     const recipe = await prisma.recipe.findFirst({ where: { id, ...await householdRecipeReadFilter(user) } });
     if (!recipe) return NextResponse.json({ error: "Recipe not found" }, { status: 404 });

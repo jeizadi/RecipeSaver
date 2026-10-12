@@ -21,6 +21,7 @@ export default async function NewRecipePage({
     imageUrl: "",
     author: "",
     category: "other",
+    cuisine: "",
     tags: "",
   };
   return (

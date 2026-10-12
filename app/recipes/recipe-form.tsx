@@ -36,6 +36,7 @@ export interface RecipeFormInitial {
   imageUrl: string;
   author: string;
   category: string;
+  cuisine: string;
   tags: string;
 }
 
@@ -52,6 +53,7 @@ const emptyInitial: RecipeFormInitial = {
   imageUrl: "",
   author: "",
   category: "other",
+  cuisine: "",
   tags: "",
 };
 
@@ -134,6 +136,7 @@ export function RecipeForm({
         imageUrl: d.imageUrl ?? prev.imageUrl,
         author: d.author ?? prev.author,
         category: d.category ?? prev.category,
+        cuisine: d.cuisine ?? prev.cuisine,
       }));
       setLinkHintsScanNonce((n) => n + 1);
       setStatus("Imported! Review and click Save.");
@@ -227,6 +230,7 @@ export function RecipeForm({
         imageUrl: form.imageUrl.trim(),
         author: form.author.trim(),
         category: form.category,
+        cuisine: form.cuisine.trim(),
         tags: form.tags.trim(),
       };
       const res = await fetch(url, {
@@ -505,6 +509,11 @@ export function RecipeForm({
             </option>
           ))}
         </select>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-medium">Cuisine</label>
+        <input type="text" value={form.cuisine} onChange={(e) => setValue("cuisine", e.target.value)} placeholder="e.g. Mexican, Italian, Korean" className="rounded border border-[#d2c2af] px-2 py-1.5 text-sm" />
       </div>
 
       <div className="flex flex-col gap-1">

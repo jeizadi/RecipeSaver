@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
     const q = searchParams.get("q")?.trim() ?? "";
     const ingredient = searchParams.get("ingredient")?.trim() ?? "";
     const category = searchParams.get("category")?.trim() ?? "";
+    const cuisine = searchParams.get("cuisine")?.trim() ?? "";
     const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
     const pageSize = 20;
 
@@ -33,6 +34,7 @@ export async function GET(request: NextRequest) {
       where.ingredientsText = { contains: ingredient, mode: "insensitive" };
     if (category && CATEGORIES.includes(category as (typeof CATEGORIES)[number]))
       where.category = category;
+    if (cuisine) where.cuisine = { contains: cuisine, mode: "insensitive" };
 
     const [recipes, total] = await Promise.all([
       prisma.recipe.findMany({
@@ -82,6 +84,7 @@ export async function POST(request: NextRequest) {
       imageUrl = "",
       author = "",
       category = "other",
+      cuisine = "",
       tags = "",
     } = body;
 
@@ -128,6 +131,7 @@ export async function POST(request: NextRequest) {
         imageUrl: (imageUrl ?? "").toString().trim(),
         author: (author ?? "").toString().trim(),
         category: cat,
+        cuisine: (cuisine ?? "").toString().trim(),
         tags: (tags ?? "").toString().trim(),
         userId: recipeOwnerId(user),
       },

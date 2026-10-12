@@ -1,0 +1,1 @@
+ALTER TABLE "recipes" ADD COLUMN "cuisine" TEXT NOT NULL DEFAULT '';
