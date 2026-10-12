@@ -11,6 +11,7 @@ import { getRequestUser, householdRecipeReadFilter } from "@/lib/access";
 import { getHouseholdUserIds } from "@/lib/households";
 import {
   categoryForIngredient,
+  getOrCreateShoppingList,
   getOwnedShoppingList,
   normalizeShoppingName,
   parseWeekStart,
@@ -76,11 +77,7 @@ export async function POST(request: NextRequest) {
       ? body.category!
       : categoryForIngredient(normalizedName);
     const weekStart = parseWeekStart(body.weekStart);
-    const list = await prisma.shoppingList.upsert({
-      where: { userId_weekStart: { userId: householdUserIds[0], weekStart } },
-      create: { userId: householdUserIds[0], weekStart },
-      update: {},
-    });
+    const list = await getOrCreateShoppingList(householdUserIds[0], weekStart);
     const nameKey = normalized?.nameKey ?? normalizeShoppingName(normalizedName);
     const item = await prisma.shoppingListItem.upsert({
       where: { shoppingListId_nameKey: { shoppingListId: list.id, nameKey } },
@@ -230,21 +227,22 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const user = await getRequestUser(request);
-  if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-  const householdUserIds = await getHouseholdUserIds(user.id);
-  const body = (await request.json().catch(() => null)) as {
+  try {
+    const user = await getRequestUser(request);
+    if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    const householdUserIds = await getHouseholdUserIds(user.id);
+    const body = (await request.json().catch(() => null)) as {
     id?: number;
     checked?: boolean;
     name?: string;
     quantity?: string;
     category?: string;
-  } | null;
-  const id = Number(body?.id);
-  if (!Number.isInteger(id) || id < 1) return NextResponse.json({ ok: false, error: "Valid item id is required." }, { status: 400 });
-  const existing = await getOwnedShoppingList(householdUserIds, id);
-  if (!existing) return NextResponse.json({ ok: false, error: "Shopping item not found." }, { status: 404 });
-  const item = await prisma.shoppingListItem.update({
+    } | null;
+    const id = Number(body?.id);
+    if (!Number.isInteger(id) || id < 1) return NextResponse.json({ ok: false, error: "Valid item id is required." }, { status: 400 });
+    const existing = await getOwnedShoppingList(householdUserIds, id);
+    if (!existing) return NextResponse.json({ ok: false, error: "Shopping item not found." }, { status: 404 });
+    const item = await prisma.shoppingListItem.update({
     where: { id },
     data: {
       ...(typeof body?.checked === "boolean" ? { checked: body.checked } : {}),
@@ -254,8 +252,12 @@ export async function PATCH(request: NextRequest) {
         ? { category: body.category }
         : {}),
     },
-  });
-  return NextResponse.json({ ok: true, item });
+    });
+    return NextResponse.json({ ok: true, item });
+  } catch (error) {
+    console.error("Shopping list update failed", error);
+    return NextResponse.json({ ok: false, error: "Could not update the shopping list. Please refresh and try again." }, { status: 500 });
+  }
 }
 
 export async function DELETE(request: NextRequest) {

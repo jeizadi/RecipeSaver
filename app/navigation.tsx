@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AUTH_ENABLED } from "@/lib/auth-config";
 import { AuthControls } from "./auth/auth-controls";
 
@@ -10,6 +10,7 @@ const links = [
   { href: "/shop", label: "Shop", show: "always" },
   { href: "/weekly", label: "Weekly Plan", show: "sm" },
   { href: "/suggestions", label: "Discover", show: "md" },
+  { href: "/recipes", label: "Recipes", show: "sm" },
 ] as const;
 
 function isActive(pathname: string, href: string) {
@@ -20,6 +21,38 @@ export function Navigation() {
   const pathname = usePathname();
   const [profileOpen, setProfileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!searchOpen) return;
+    function closeOnOutside(event: MouseEvent) {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) setSearchOpen(false);
+    }
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setSearchOpen(false);
+    }
+    document.addEventListener("mousedown", closeOnOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [searchOpen]);
+  useEffect(() => {
+    if (!profileOpen) return;
+    function closeOnOutside(event: MouseEvent) {
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) setProfileOpen(false);
+    }
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setProfileOpen(false);
+    }
+    document.addEventListener("mousedown", closeOnOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [profileOpen]);
   return (
     <>
     <nav className="relative flex items-center gap-1 text-sm">
@@ -37,7 +70,7 @@ export function Navigation() {
           {link.label}
         </Link>
       ))}
-      <div className="relative hidden lg:block">
+      <div ref={searchRef} className="relative hidden lg:block">
         <button
           type="button"
           aria-expanded={searchOpen}
@@ -63,7 +96,7 @@ export function Navigation() {
                 <option value="sauce">Sauce</option>
               </select>
             </div>
-            <button type="submit" className="mt-3 w-full rounded-xl bg-[#f4a51c] px-3 py-2 text-sm font-semibold text-[#4a2b00] hover:bg-[#e39a0f]">Search recipes</button>
+            <button type="submit" onClick={() => setSearchOpen(false)} className="mt-3 w-full rounded-xl bg-[#f4a51c] px-3 py-2 text-sm font-semibold text-[#4a2b00] hover:bg-[#e39a0f]">Search recipes</button>
           </form>
         )}
       </div>
@@ -71,6 +104,7 @@ export function Navigation() {
         Add Recipe
       </Link>
       {AUTH_ENABLED && <AuthControls />}
+      <div ref={profileRef} className="relative">
       <button
         type="button"
         aria-label="Profile"
@@ -85,7 +119,7 @@ export function Navigation() {
         </svg>
       </button>
       {profileOpen && (
-        <div role="dialog" aria-label="Profile menu" className="absolute right-4 top-16 z-20 w-64 rounded-2xl border border-[#eadfca] bg-[#fffdf8] p-4 shadow-lg">
+        <div role="dialog" aria-label="Profile menu" className="absolute right-0 top-12 z-20 w-64 rounded-2xl border border-[#eadfca] bg-[#fffdf8] p-4 shadow-lg">
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-slate-900">Your profile</p>
@@ -98,6 +132,7 @@ export function Navigation() {
           </Link>
         </div>
       )}
+      </div>
     </nav>
     <nav aria-label="Mobile navigation" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-[#eadfca] bg-[#fffdf8]/95 px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgba(74,43,0,0.08)] backdrop-blur sm:hidden">
       {[

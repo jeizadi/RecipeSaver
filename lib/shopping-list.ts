@@ -14,6 +14,26 @@ export const SHOPPING_CATEGORIES = [
 
 export type ShoppingCategory = (typeof SHOPPING_CATEGORIES)[number];
 
+export async function getOrCreateShoppingList(userId: number, weekStart: Date) {
+  try {
+    return await prisma.shoppingList.upsert({
+      where: { userId_weekStart: { userId, weekStart } },
+      create: { userId, weekStart },
+      update: {},
+    });
+  } catch (error) {
+    // Two tabs/effects can request the same week at once. Prisma's upsert can
+    // race on PostgreSQL, so recover from the losing insert and read the row.
+    const code = error && typeof error === "object" && "code" in error
+      ? (error as { code?: string }).code
+      : undefined;
+    if (code !== "P2002") throw error;
+    return prisma.shoppingList.findUniqueOrThrow({
+      where: { userId_weekStart: { userId, weekStart } },
+    });
+  }
+}
+
 export function parseWeekStart(value?: string | null): Date {
   if (value && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
     const parsed = new Date(`${value}T00:00:00.000Z`);
@@ -139,11 +159,7 @@ export async function syncShoppingList(userId: number | number[], weekStart: Dat
     }
   }
 
-  const list = await prisma.shoppingList.upsert({
-    where: { userId_weekStart: { userId: userIds[0], weekStart } },
-    create: { userId: userIds[0], weekStart },
-    update: {},
-  });
+  const list = await getOrCreateShoppingList(userIds[0], weekStart);
 
   const generatedKeys = aggregates.map((item) => item.nameKey || normalizeShoppingName(item.displayName));
   for (const item of aggregates) {
