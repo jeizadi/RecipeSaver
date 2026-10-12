@@ -3,13 +3,15 @@ import type { AggregatedIngredient } from "./ingredients";
 const TIMEOUT_MS = 25_000;
 
 const SYSTEM_PROMPT =
-  "You consolidate a grocery shopping list. Merge rows that refer to the same real-world item; " +
-  "add totalQuantity when combining. Keep units (cup, head, clove, bunch, etc.) consistent. " +
+  "You normalize a grocery shopping list for a real shopping trip. Merge rows that refer to the same real-world item; " +
+  "add totalQuantity when combining. Prefer practical purchase units over recipe measurement units when reliable: " +
+  "for example, convert citrus juice to whole lemons/limes/oranges using typical yields, but keep uncertain liquids measured. " +
+  "Keep units (cup, tbsp, head, clove, bunch, lime, lemon, etc.) consistent. " +
   "Output ONLY compact JSON: {\"items\":[{\"nameKey\":\"\",\"displayName\":\"\",\"unit\":null,\"totalQuantity\":null,\"lines\":[]}]}. " +
-  "nameKey: stable id like the rule engine (lowercase letters from ingredient words, sorted, no spaces). " +
+  "nameKey: stable lowercase id for the shopping item, with no spaces. " +
   "unit: string or null. totalQuantity: a JSON number or null. " +
-  "lines: string array of contributing original lines (never omit; use merged list). " +
-  "Do not invent items. If uncertain, keep separate.";
+  "lines: string array of contributing ORIGINAL input lines copied exactly (never omit; use merged list). " +
+  "Do not invent items or lines. If uncertain, keep separate and preserve the measured quantity.";
 
 export type RefineLlmResult =
   | { ok: true; items: AggregatedIngredient[] }
@@ -87,7 +89,8 @@ function buildUserMessage(items: AggregatedIngredient[]): string {
 
 function parseModelJsonToItems(
   text: string,
-  modelLabel: string
+  modelLabel: string,
+  originalItems?: AggregatedIngredient[]
 ): RefineLlmResult {
   if (!text.trim()) {
     return { ok: false, error: `${modelLabel} returned an empty message.` };
@@ -114,9 +117,14 @@ function parseModelJsonToItems(
   }
 
   const out: AggregatedIngredient[] = [];
+  const originalLines = originalItems
+    ? new Set(originalItems.flatMap((item) => item.lines.map((line) => line.trim())))
+    : null;
   for (const row of parsed.items) {
     const agg = normalizeRowToAggregated(row);
-    if (agg) out.push(agg);
+    if (!agg) continue;
+    if (originalLines && !agg.lines.some((line) => originalLines.has(line.trim()))) continue;
+    out.push(agg);
   }
 
   if (!out.length) {
@@ -275,10 +283,7 @@ async function refineWithGemini(
       return { ok: false, error: raw.error };
     }
 
-    const parsed = parseModelJsonToItems(
-      raw.text,
-      `Gemini (${raw.model})`
-    );
+    const parsed = parseModelJsonToItems(raw.text, `Gemini (${raw.model})`, items);
     if (parsed.ok) return parsed;
     return parsed;
   }
@@ -336,7 +341,7 @@ async function refineWithOpenAI(
     choices?: { message?: { content?: string | null } }[];
   };
   const text = data.choices?.[0]?.message?.content;
-  return parseModelJsonToItems(text ?? "", "OpenAI");
+  return parseModelJsonToItems(text ?? "", "OpenAI", items);
 }
 
 /**
