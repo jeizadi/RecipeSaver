@@ -80,29 +80,42 @@ export async function syncShoppingList(userId: number | number[], weekStart: Dat
       plannedFor: { gte: weekStart, lt: weekEndExclusive(weekStart) },
       status: { not: "skipped" },
     },
-    include: {
-      recipe: {
-        select: {
-          id: true,
-          title: true,
-          ingredientsText: true,
-          servings: true,
-          parentComponents: {
-            where: { includedByDefault: true },
-            orderBy: { sortOrder: "asc" },
-            include: { childRecipe: { select: { id: true, title: true, ingredientsText: true, servings: true } } },
-          },
-        },
-      },
-    },
+    include: { recipe: { select: { id: true, title: true, ingredientsText: true, servings: true } } },
     orderBy: { plannedFor: "asc" },
   });
+
+  // Child components are an additive feature. Keep the core shopping list
+  // usable while an existing hosted database is waiting for that migration.
+  const componentsByParent = new Map<number, Array<{
+    label: string;
+    childRecipe: { id: number; title: string; ingredientsText: string; servings: string };
+  }>>();
+  const parentIds = plans.map((plan) => plan.recipe.id);
+  if (parentIds.length) {
+    try {
+      const components = await prisma.recipeComponent.findMany({
+        where: { parentRecipeId: { in: parentIds }, includedByDefault: true },
+        orderBy: { sortOrder: "asc" },
+        include: { childRecipe: { select: { id: true, title: true, ingredientsText: true, servings: true } } },
+      });
+      for (const component of components) {
+        const list = componentsByParent.get(component.parentRecipeId) ?? [];
+        list.push(component);
+        componentsByParent.set(component.parentRecipeId, list);
+      }
+    } catch (error) {
+      const code = error && typeof error === "object" && "code" in error
+        ? (error as { code?: string }).code
+        : undefined;
+      if (code !== "P2021") throw error;
+    }
+  }
 
   const sources: Source[] = plans.flatMap((plan) => {
     const sourcesForPlan: Source[] = plan.recipe.ingredientsText.trim()
       ? [{ recipeId: plan.recipe.id, title: plan.recipe.title, ingredientsText: plan.recipe.ingredientsText, servings: plan.recipe.servings }]
       : [];
-    for (const component of plan.recipe.parentComponents) {
+    for (const component of componentsByParent.get(plan.recipe.id) ?? []) {
       if (component.childRecipe.ingredientsText.trim()) {
         sourcesForPlan.push({
           recipeId: component.childRecipe.id,
