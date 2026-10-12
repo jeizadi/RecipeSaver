@@ -298,37 +298,24 @@ export function RecipeForm({
                 mergedTitle
               ): Promise<LinkedAddonMergeResult> => {
                 const ok = window.confirm(
-                  `Merge “${mergedTitle}” from your library into this recipe?\n\n` +
-                    "Its ingredients and instructions will be appended with a heading. Nothing is saved until you click Save."
+                  `Add “${mergedTitle}” as an optional component?\n\n` +
+                    "It will stay editable as its own recipe and can be included or excluded from future shopping lists."
                 );
                 if (!ok) return { ok: false, cancelled: true };
-                const res = await fetch(`/api/recipes/${recipeId}/merge`, {
+                const res = await fetch(`/api/recipes/${recipeId}/components`, {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    childRecipeId,
-                    ingredientsText: form.ingredientsText,
-                    instructionsText: form.instructionsText,
-                  }),
+                  body: JSON.stringify({ childRecipeId, label: mergedTitle }),
                 });
                 const data = await res.json().catch(() => ({}));
                 if (!data.ok) {
-                  setStatus(data.error ?? "Merge failed.");
+                  setStatus(data.error ?? "Could not add component.");
                   setStatusError(true);
                   return { ok: false, error: data.error };
                 }
-                const title = (data.mergedTitle as string) ?? mergedTitle;
-                setForm((prev) => ({
-                  ...prev,
-                  ingredientsText: data.ingredientsText ?? prev.ingredientsText,
-                  instructionsText:
-                    data.instructionsText ?? prev.instructionsText,
-                }));
-                setStatus(
-                  `Merged “${title}” into this recipe. Review and click Save to store it.`
-                );
+                setStatus(`Added “${mergedTitle}” as an optional component.`);
                 setStatusError(false);
-                return { ok: true, mergedTitle: title };
+                return { ok: true, mergedTitle };
               }
             : undefined
         }
