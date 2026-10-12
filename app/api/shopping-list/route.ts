@@ -11,6 +11,7 @@ import { getRequestUser, householdRecipeReadFilter } from "@/lib/access";
 import { getHouseholdUserIds } from "@/lib/households";
 import {
   categoryForIngredient,
+  getOrCreateShoppingList,
   getOwnedShoppingList,
   normalizeShoppingName,
   parseWeekStart,
@@ -76,11 +77,7 @@ export async function POST(request: NextRequest) {
       ? body.category!
       : categoryForIngredient(normalizedName);
     const weekStart = parseWeekStart(body.weekStart);
-    const list = await prisma.shoppingList.upsert({
-      where: { userId_weekStart: { userId: householdUserIds[0], weekStart } },
-      create: { userId: householdUserIds[0], weekStart },
-      update: {},
-    });
+    const list = await getOrCreateShoppingList(householdUserIds[0], weekStart);
     const nameKey = normalized?.nameKey ?? normalizeShoppingName(normalizedName);
     const item = await prisma.shoppingListItem.upsert({
       where: { shoppingListId_nameKey: { shoppingListId: list.id, nameKey } },
