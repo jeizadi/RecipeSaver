@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { householdRecipeReadFilter } from "@/lib/access";
 import { requireUser } from "@/lib/require-user";
 import { IngredientsCopyReadOnly } from "../ingredients-with-copy";
+import { RecipeComponentsPanel } from "../recipe-components-panel";
 
 const CATEGORIES: Record<string, string> = {
   breakfast: "Breakfast",
@@ -26,7 +27,15 @@ export default async function RecipePage({
   const id = parseInt((await params).id, 10);
   if (!Number.isFinite(id)) notFound();
 
-  const recipe = await prisma.recipe.findFirst({ where: { id, ...await householdRecipeReadFilter(user) } });
+  const recipe = await prisma.recipe.findFirst({
+    where: { id, ...await householdRecipeReadFilter(user) },
+    include: {
+      parentComponents: {
+        orderBy: { sortOrder: "asc" },
+        include: { childRecipe: { select: { id: true, title: true, category: true } } },
+      },
+    },
+  });
   if (!recipe) notFound();
 
   const categoryLabel = CATEGORIES[recipe.category] ?? recipe.category;
@@ -58,6 +67,8 @@ export default async function RecipePage({
         text={recipe.ingredientsText}
         servings={recipe.servings}
       />
+
+      <RecipeComponentsPanel parentRecipeId={recipe.id} initialComponents={recipe.parentComponents} />
 
       {recipe.instructionsText && (
         <section className="mb-6">

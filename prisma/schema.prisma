@@ -34,9 +34,29 @@ model Recipe {
   suggestionItems    SuggestionItem[]
   user               AppUser?  @relation(fields: [userId], references: [id], onDelete: SetNull)
   weeklyMeals        WeeklyMealPlan[]
+  parentComponents   RecipeComponent[] @relation("ParentRecipeComponents")
+  childComponents    RecipeComponent[] @relation("ChildRecipeComponents")
 
   @@index([userId, createdAt])
   @@map("recipes")
+}
+
+model RecipeComponent {
+  id                Int      @id @default(autoincrement())
+  parentRecipeId    Int      @map("parent_recipe_id")
+  childRecipeId     Int      @map("child_recipe_id")
+  parentRecipe      Recipe   @relation("ParentRecipeComponents", fields: [parentRecipeId], references: [id], onDelete: Cascade)
+  childRecipe       Recipe   @relation("ChildRecipeComponents", fields: [childRecipeId], references: [id], onDelete: Cascade)
+  label             String   @default("")
+  includedByDefault Boolean  @default(true) @map("included_by_default")
+  sortOrder         Int      @default(0) @map("sort_order")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@unique([parentRecipeId, childRecipeId])
+  @@index([parentRecipeId, sortOrder])
+  @@index([childRecipeId])
+  @@map("recipe_components")
 }
 
 enum FeedbackSignal {
