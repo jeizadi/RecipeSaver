@@ -21,6 +21,7 @@ export function Navigation() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   return (
+    <>
     <nav className="relative flex items-center gap-1 text-sm">
       {links.map((link) => (
         <Link
@@ -98,5 +99,19 @@ export function Navigation() {
         </div>
       )}
     </nav>
+    <nav aria-label="Mobile navigation" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-[#eadfca] bg-[#fffdf8]/95 px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgba(74,43,0,0.08)] backdrop-blur sm:hidden">
+      {[
+        ["/shop", "Shop"],
+        ["/weekly", "Plan"],
+        ["/suggestions", "Discover"],
+        ["/search", "Search"],
+      ].map(([href, label]) => (
+        <Link key={href} href={href} className={`flex flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 text-[11px] font-medium ${isActive(pathname, href) ? "bg-[#fff0c7] text-[#8a5200]" : "text-slate-500"}`}>
+          <span className="text-base leading-none">{href === "/shop" ? "▢" : href === "/weekly" ? "□" : href === "/suggestions" ? "✦" : "⌕"}</span>
+          {label}
+        </Link>
+      ))}
+    </nav>
+    </>
   );
 }

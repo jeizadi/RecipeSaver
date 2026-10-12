@@ -36,7 +36,7 @@ export default function RootLayout({
             <Navigation />
           </div>
         </header>
-        <main className="mx-auto max-w-5xl px-4 py-6">{children}</main>
+        <main className="mx-auto max-w-5xl px-4 py-6 pb-24 sm:pb-6">{children}</main>
       </body>
     </html>
   );
