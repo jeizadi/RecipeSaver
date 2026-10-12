@@ -36,6 +36,7 @@ export interface RecipeFormInitial {
   imageUrl: string;
   author: string;
   category: string;
+  cuisine: string;
   tags: string;
 }
 
@@ -52,6 +53,7 @@ const emptyInitial: RecipeFormInitial = {
   imageUrl: "",
   author: "",
   category: "other",
+  cuisine: "",
   tags: "",
 };
 
@@ -134,6 +136,7 @@ export function RecipeForm({
         imageUrl: d.imageUrl ?? prev.imageUrl,
         author: d.author ?? prev.author,
         category: d.category ?? prev.category,
+        cuisine: d.cuisine ?? prev.cuisine,
       }));
       setLinkHintsScanNonce((n) => n + 1);
       setStatus("Imported! Review and click Save.");
@@ -227,6 +230,7 @@ export function RecipeForm({
         imageUrl: form.imageUrl.trim(),
         author: form.author.trim(),
         category: form.category,
+        cuisine: form.cuisine.trim(),
         tags: form.tags.trim(),
       };
       const res = await fetch(url, {
@@ -294,37 +298,24 @@ export function RecipeForm({
                 mergedTitle
               ): Promise<LinkedAddonMergeResult> => {
                 const ok = window.confirm(
-                  `Merge “${mergedTitle}” from your library into this recipe?\n\n` +
-                    "Its ingredients and instructions will be appended with a heading. Nothing is saved until you click Save."
+                  `Add “${mergedTitle}” as an optional component?\n\n` +
+                    "It will stay editable as its own recipe and can be included or excluded from future shopping lists."
                 );
                 if (!ok) return { ok: false, cancelled: true };
-                const res = await fetch(`/api/recipes/${recipeId}/merge`, {
+                const res = await fetch(`/api/recipes/${recipeId}/components`, {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    childRecipeId,
-                    ingredientsText: form.ingredientsText,
-                    instructionsText: form.instructionsText,
-                  }),
+                  body: JSON.stringify({ childRecipeId, label: mergedTitle }),
                 });
                 const data = await res.json().catch(() => ({}));
                 if (!data.ok) {
-                  setStatus(data.error ?? "Merge failed.");
+                  setStatus(data.error ?? "Could not add component.");
                   setStatusError(true);
                   return { ok: false, error: data.error };
                 }
-                const title = (data.mergedTitle as string) ?? mergedTitle;
-                setForm((prev) => ({
-                  ...prev,
-                  ingredientsText: data.ingredientsText ?? prev.ingredientsText,
-                  instructionsText:
-                    data.instructionsText ?? prev.instructionsText,
-                }));
-                setStatus(
-                  `Merged “${title}” into this recipe. Review and click Save to store it.`
-                );
+                setStatus(`Added “${mergedTitle}” as an optional component.`);
                 setStatusError(false);
-                return { ok: true, mergedTitle: title };
+                return { ok: true, mergedTitle };
               }
             : undefined
         }
@@ -505,6 +496,11 @@ export function RecipeForm({
             </option>
           ))}
         </select>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-medium">Cuisine</label>
+        <input type="text" value={form.cuisine} onChange={(e) => setValue("cuisine", e.target.value)} placeholder="e.g. Mexican, Italian, Korean" className="rounded border border-[#d2c2af] px-2 py-1.5 text-sm" />
       </div>
 
       <div className="flex flex-col gap-1">

@@ -32,6 +32,7 @@ export interface ImportedRecipe {
   imageUrl: string;
   author: string;
   category: string;
+  cuisine: string;
 }
 
 function decodeHtml(html: string): string {
@@ -306,6 +307,22 @@ function inferCategory(text: string | null | undefined): string | null {
   return null;
 }
 
+function inferCuisine(text: string | null | undefined): string | null {
+  if (!text) return null;
+  const t = text.toLowerCase();
+  const signals: Array<[string, string[]]> = [
+    ["Mexican", ["taco", "enchilada", "quesadilla", "salsa", "chipotle"]],
+    ["Italian", ["pasta", "parmesan", "mozzarella", "marinara", "risotto"]],
+    ["Thai", ["pad thai", "coconut milk", "lemongrass", "thai basil"]],
+    ["Indian", ["curry", "garam masala", "tikka", "naan", "dal"]],
+    ["Korean", ["gochujang", "kimchi", "bulgogi", "gochugaru"]],
+    ["Mediterranean", ["hummus", "tahini", "couscous", "feta", "olive oil"]],
+    ["Japanese", ["sushi", "miso", "teriyaki", "panko", "dashi"]],
+    ["Chinese", ["wonton", "hoisin", "five spice", "bok choy", "kung pao"]],
+  ];
+  return signals.find(([, words]) => words.some((word) => t.includes(word)))?.[0] ?? null;
+}
+
 function extractFromVideoDescription(
   description: string
 ): [string | null, string | null] {
@@ -368,6 +385,7 @@ function emptyRecipe(): ImportedRecipe {
     imageUrl: "",
     author: "",
     category: "",
+    cuisine: "",
   };
 }
 
@@ -451,6 +469,7 @@ function parseFromWprmRecipeContainer(
     inferCategory(imported.title) ??
     inferCategory(imported.ingredientsText) ??
     "";
+  imported.cuisine = inferCuisine(`${imported.title} ${imported.ingredientsText}`) ?? "";
 
   if (
     !imported.title &&
@@ -502,6 +521,7 @@ function parseFromJsonLd(html: string): ImportedRecipe | null {
     imported.author = extractAuthor(recipeObj) ?? "";
     imported.category =
       inferCategory(coerceListToText(recipeObj.recipeCategory)) ?? "";
+    imported.cuisine = inferCuisine(`${imported.title} ${imported.ingredientsText}`) ?? "";
 
     return imported;
   }
@@ -531,6 +551,7 @@ function parseFromOpenGraph(
     imported.ingredientsText = ing ?? "";
     imported.instructionsText = inst ?? "";
     imported.category = inferCategory(description) ?? inferCategory(imported.title) ?? "";
+    imported.cuisine = inferCuisine(`${imported.title} ${description}`) ?? "";
   }
   return imported;
 }
