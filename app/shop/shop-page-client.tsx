@@ -127,7 +127,11 @@ export function ShopPageClient() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: item.id, checked: !item.checked }),
     });
-    if (!response.ok) await load();
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      setStatus(data.error ?? "Could not update the list.");
+      await load();
+    }
   }
 
   async function addItem(event: FormEvent<HTMLFormElement>) {
